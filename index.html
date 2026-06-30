@@ -48,6 +48,8 @@ body{ font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif
   cursor:pointer; transition:all .15s;
 }
 .btn:hover{ background:var(--paper3); }
+.btn:disabled{ opacity:.35; cursor:not-allowed; }
+.btn:disabled:hover{ background:var(--paper2); }
 .btn.primary{ background:var(--ink); color:#fff; border-color:var(--ink); }
 .btn.primary:hover{ background:#333; }
 .sync-status{
@@ -377,9 +379,9 @@ body{ font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif
 <div id="app">
   <div class="topbar">
     <h1>ERP Integration Portfolio</h1>
-    <span class="sub">Q3 2026 · July – September · 30 projects</span>
     <span class="sync-status" id="syncStatus"></span>
     <div class="spacer"></div>
+    <button class="btn" id="undoBtn" onclick="undoLastAction()" disabled title="Undo last change (Ctrl+Z)">↶ Undo</button>
     <button class="btn" onclick="openAllocation()">📊 Allocation</button>
     <button class="btn" onclick="openAddPerson()">+ Person</button>
     <button class="btn primary" onclick="openAddProject()">+ Project</button>
@@ -602,6 +604,46 @@ function computeLanes(bars){
 }
 
 // ═══════════════════════════════════════════════════════════════════
+//  UNDO HISTORY — push a snapshot before any data-changing action
+// ═══════════════════════════════════════════════════════════════════
+let undoStack = [];
+const UNDO_LIMIT = 50;
+
+function pushUndoSnapshot(){
+  undoStack.push(JSON.stringify({
+    people: people, projects: projects, muted: muted,
+    activeSquad: activeSquad, activePerson: activePerson,
+  }));
+  if(undoStack.length > UNDO_LIMIT) undoStack.shift();
+  updateUndoButton();
+}
+
+function undoLastAction(){
+  if(!undoStack.length) return;
+  const snap = JSON.parse(undoStack.pop());
+  people       = snap.people;
+  projects     = snap.projects;
+  muted        = snap.muted;
+  activeSquad  = snap.activeSquad;
+  activePerson = snap.activePerson;
+  updateUndoButton();
+  render();
+}
+
+function updateUndoButton(){
+  const btn = document.getElementById('undoBtn');
+  if(btn) btn.disabled = undoStack.length===0;
+}
+
+document.addEventListener('keydown', (e)=>{
+  const isUndoCombo = (e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='z';
+  if(isUndoCombo){
+    e.preventDefault();
+    undoLastAction();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
 //  RENDER
 // ═══════════════════════════════════════════════════════════════════
 function render(){
@@ -694,6 +736,7 @@ function removePerson(name){
   if(!name) return;
   const idx = people.indexOf(name);
   if(idx===-1) return;
+  pushUndoSnapshot();
   people.splice(idx,1);
   delete muted[name];
   if(activePerson===name) activePerson=null;
@@ -769,12 +812,14 @@ function renderBody(){
     inner.appendChild(hd);
 
     list.forEach(proj=>{
-      // Compute lanes per phase: people whose date ranges overlap go on separate
-      // vertical lanes so you can see true parallel work, not squeezed side-by-side.
-      const phaseLanes = proj.phases.map(ph=>computeLanes(ph.bars));
+      // Compute lanes across the WHOLE project (all phases combined), not per
+      // phase in isolation. This way a bar can freely stretch past its phase's
+      // visual boundary (e.g. dev work spilling into the testing window) and
+      // the system still finds it a free lane instead of overlapping anyone.
+      const allBars = proj.phases.flatMap(ph => ph.bars.map(b => ({...b, _phase: ph.ph})));
+      const lanes = computeLanes(allBars);
       const LANE_H = 18, LANE_GAP = 2, PAD = 3;
-      const phHeights = phaseLanes.map(l=>Math.max(l.length,1)*(LANE_H+LANE_GAP)-LANE_GAP + PAD*2);
-      const ROW_H = Math.max(...phHeights); // all phases share the same row height = tallest phase
+      const ROW_H = Math.max(lanes.length,1)*(LANE_H+LANE_GAP)-LANE_GAP + PAD*2;
       const bcolor = PRIO_CLR[proj.prio]||PRIO_CLR[''];
       const deps   = [proj.coreApi&&'Core API',proj.jd&&'JD'].filter(Boolean);
 
@@ -803,6 +848,8 @@ function renderBody(){
       tl.style.cssText=`width:${TW}px;min-height:${ROW_H}px;position:relative;overflow:hidden`;
       tl.innerHTML=vlines();
 
+      // Phase color bands span the full row height — purely visual reference,
+      // never constraining where a bar can sit or how far it can stretch.
       proj.phases.forEach((ph,pi)=>{
         const s=PHASE_CSS[ph.ph];
         const x1=ph.startD*DAY_PX;
@@ -820,53 +867,58 @@ function renderBody(){
           dv.style.cssText=`left:${x1}px;top:0;height:${ROW_H}px`;
           tl.appendChild(dv);
         }
+      });
 
-        // Real parallel lanes: overlapping bars stack vertically, non-overlapping
-        // bars (sequential people) reuse the same lane to stay compact.
-        const lanes = phaseLanes[pi];
-        lanes.forEach((lane,li)=>{
-          lane.forEach(bar=>{
-            const c=pc(bar.person);
-            const bx = bar.startD*DAY_PX;
-            const bwBar = Math.max((bar.endD-bar.startD+1)*DAY_PX-1, 15);
-            const by = PAD + li*(LANE_H+LANE_GAP);
-            const el=document.createElement('div');
-            const isDimmed = muted[bar.person] || (activePerson && bar.person!==activePerson);
-            el.className='bar'+(isDimmed?' muted':'');
-            el.style.cssText=`left:${bx}px;width:${bwBar}px;top:${by}px;height:${LANE_H}px;background:${c.bg};color:${c.tx};border:1px solid ${c.bd}`;
-            el.innerHTML=`<div class="bar-resize bar-resize-l" title="Drag to resize start"></div>`
-              +`<span class="bar-content">`
-                +`<span class="bar-av" style="background:${c.tx};color:#fff">${bar.person[0]}</span>`
-                +(bwBar>30?`<span>${bar.person}</span>`:'')
-              +`</span>`
-              +`<span class="bar-x" title="Remove ${bar.person} from ${PHASE_FULL[ph.ph]}">×</span>`
-              +`<div class="bar-resize bar-resize-r" title="Drag to resize end"></div>`;
-            el.title=`${bar.person} · ${PHASE_FULL[ph.ph]} · click name to swap person`;
-            el.dataset.projId  = proj.id;
-            el.dataset.phase   = ph.ph;
-            el.dataset.barId   = bar.id;
-            el.onclick=(e)=>{
-              if(justDragged) return;
-              if(e.target.classList.contains('bar-x')){
-                e.stopPropagation();
-                removeBar(proj.id, ph.ph, bar);
-                return;
-              }
-              if(e.target.classList.contains('bar-resize')) return;
-              if(e.target.closest('.bar-content')){
-                openSwapPerson(e, proj.id, ph.ph, bar);
-                return;
-              }
-              openEditBar(proj.id, ph.ph, bar);
-            };
-            el.addEventListener('mousedown', (e)=>{
-              if(e.target.classList.contains('bar-x')) return;
-              if(e.target.classList.contains('bar-resize-l')){ resizeStart(e, proj.id, ph.ph, bar, 'left'); return; }
-              if(e.target.classList.contains('bar-resize-r')){ resizeStart(e, proj.id, ph.ph, bar, 'right'); return; }
-              dragStart(e);
-            });
-            tl.appendChild(el);
+      // Bars drawn once, in lanes computed across the whole project, fully
+      // free to extend in either direction regardless of phase boundaries.
+      lanes.forEach((lane,li)=>{
+        lane.forEach(bar=>{
+          const phaseName = bar._phase;
+          const ph = proj.phases.find(p=>p.ph===phaseName);
+          const c=pc(bar.person);
+          const bx = bar.startD*DAY_PX;
+          const bwBar = Math.max((bar.endD-bar.startD+1)*DAY_PX-1, 15);
+          const by = PAD + li*(LANE_H+LANE_GAP);
+          const el=document.createElement('div');
+          const isDimmed = muted[bar.person] || (activePerson && bar.person!==activePerson);
+          el.className='bar'+(isDimmed?' muted':'');
+          el.style.cssText=`left:${bx}px;width:${bwBar}px;top:${by}px;height:${LANE_H}px;background:${c.bg};color:${c.tx};border:1px solid ${c.bd}`;
+          el.innerHTML=`<div class="bar-resize bar-resize-l" title="Drag to resize start"></div>`
+            +`<span class="bar-content">`
+              +`<span class="bar-av" style="background:${c.tx};color:#fff">${bar.person[0]}</span>`
+              +(bwBar>30?`<span>${bar.person}</span>`:'')
+            +`</span>`
+            +`<span class="bar-x" title="Remove ${bar.person} from ${PHASE_FULL[phaseName]}">×</span>`
+            +`<div class="bar-resize bar-resize-r" title="Drag to resize end"></div>`;
+          el.title=`${bar.person} · ${PHASE_FULL[phaseName]} · click name to swap person`;
+          el.dataset.projId  = proj.id;
+          el.dataset.phase   = phaseName;
+          el.dataset.barId   = bar.id;
+
+          // Find the real bar object (not the flattened copy) so edits persist
+          const realBar = ph.bars.find(b=>b.id===bar.id);
+
+          el.onclick=(e)=>{
+            if(justDragged) return;
+            if(e.target.classList.contains('bar-x')){
+              e.stopPropagation();
+              removeBar(proj.id, phaseName, realBar);
+              return;
+            }
+            if(e.target.classList.contains('bar-resize')) return;
+            if(e.target.closest('.bar-content')){
+              openSwapPerson(e, proj.id, phaseName, realBar);
+              return;
+            }
+            openEditBar(proj.id, phaseName, realBar);
+          };
+          el.addEventListener('mousedown', (e)=>{
+            if(e.target.classList.contains('bar-x')) return;
+            if(e.target.classList.contains('bar-resize-l')){ resizeStart(e, proj.id, phaseName, realBar, 'left'); return; }
+            if(e.target.classList.contains('bar-resize-r')){ resizeStart(e, proj.id, phaseName, realBar, 'right'); return; }
+            dragStart(e);
           });
+          tl.appendChild(el);
         });
       });
 
@@ -995,6 +1047,7 @@ function dragEnd(e){
   const {bar, span, origStartD, moved, previewStartD} = dragState;
 
   if(moved && previewStartD!=null){
+    pushUndoSnapshot();
     bar.startD = previewStartD;
     bar.endD   = Math.min(TOTAL_D-1, previewStartD + span);
   }
@@ -1016,7 +1069,7 @@ function removeBar(projId, phaseName, bar){
   const ph = proj?.phases.find(p=>p.ph===phaseName);
   if(!ph) return;
   const i = ph.bars.indexOf(bar);
-  if(i>=0) ph.bars.splice(i,1);
+  if(i>=0){ pushUndoSnapshot(); ph.bars.splice(i,1); }
   render();
 }
 
@@ -1070,7 +1123,7 @@ function openSwapPerson(e, projId, phaseName, bar){
       const proj=projects.find(p=>p.id===projId);
       const ph=proj.phases.find(p=>p.ph===phaseName);
       const target=ph.bars.find(b=>b===bar);
-      if(target) target.person = newPerson;
+      if(target){ pushUndoSnapshot(); target.person = newPerson; }
       closeSwapPopover();
       render();
     });
@@ -1093,6 +1146,7 @@ function resizeStart(e, projId, phaseName, bar, edge){
   const ph = proj?.phases.find(p=>p.ph===phaseName);
   if(!ph) return;
 
+  pushUndoSnapshot();
   resizeState = {
     proj, ph, bar, edge,
     startX: e.clientX,
@@ -1278,6 +1332,7 @@ function saveBar(){
   const startD=readDateOpt('m_st');
   const endD=readDateOpt('m_en');
   if(endD<startD) return;
+  pushUndoSnapshot();
   const proj=projects.find(p=>p.id===s.projId);
   const oldPh=proj.phases.find(p=>p.ph===s.phase);
   const targetPh=proj.phases.find(p=>p.ph===newPhase);
@@ -1294,6 +1349,7 @@ function saveBar(){
 }
 function deleteBar(){
   const s=editState;
+  pushUndoSnapshot();
   const proj=projects.find(p=>p.id===s.projId);
   const ph=proj.phases.find(p=>p.ph===s.phase);
   const i=ph.bars.indexOf(s.orig);
@@ -1302,7 +1358,7 @@ function deleteBar(){
 }
 function savePerson(){
   const n=document.getElementById('m_name').value.trim();
-  if(n&&!people.includes(n)) people.push(n);
+  if(n&&!people.includes(n)){ pushUndoSnapshot(); people.push(n); }
   closeModal(); render();
 }
 function saveNewProj(){
@@ -1310,6 +1366,7 @@ function saveNewProj(){
   const squad=document.getElementById('m_squad').value;
   const prio=document.getElementById('m_prio').value;
   const hours=parseInt(document.getElementById('m_hours').value)||80;
+  pushUndoSnapshot();
   const id=Math.max(...projects.map(p=>p.id))+1;
   projects.push(buildProject([id,name,squad,prio,false,false,hours]));
   if(!ALL_SQUADS.includes(squad)) ALL_SQUADS.push(squad);
@@ -1320,6 +1377,7 @@ function saveEditProject(){
   const s=editState;
   const proj=projects.find(p=>p.id===s.projId);
   if(!proj) return;
+  pushUndoSnapshot();
   proj.name = document.getElementById('m_pname2').value.trim() || proj.name;
   proj.squad = document.getElementById('m_squad2').value;
   proj.prio  = document.getElementById('m_prio2').value;
@@ -1332,7 +1390,7 @@ function saveEditProject(){
 function deleteProject(){
   const s=editState;
   const idx=projects.findIndex(p=>p.id===s.projId);
-  if(idx>=0) projects.splice(idx,1);
+  if(idx>=0){ pushUndoSnapshot(); projects.splice(idx,1); }
   closeModal(); render();
 }
 
@@ -1412,8 +1470,12 @@ async function loadFromSupabase(){
 }
 
 let saveDebounce;
+let isSaving = false;
+let hasPendingSave = false;
+
 function scheduleSave(){
   if(!SYNC_ENABLED || applyingRemoteUpdate) return;
+  hasPendingSave = true;
   clearTimeout(saveDebounce);
   setSyncStatus('Saving…', 'loading');
   saveDebounce = setTimeout(()=>saveToSupabase(false), 500);
@@ -1423,7 +1485,9 @@ async function saveToSupabase(isSeed){
   if(!SYNC_ENABLED) return;
   const snap = snapshotState();
   const json = JSON.stringify(snap);
+  hasPendingSave = false;
   if(!isSeed && json===lastSavedSnapshot) { setSyncStatus('● Live — synced with team', 'live'); return; }
+  isSaving = true;
   try{
     await sbRequest('PATCH', { data: snap, updated_at: new Date().toISOString() });
     lastSavedSnapshot = json;
@@ -1431,6 +1495,8 @@ async function saveToSupabase(isSeed){
   } catch(err){
     console.error(err);
     setSyncStatus('⚠ Save failed — check connection', 'error');
+  } finally {
+    isSaving = false;
   }
 }
 
@@ -1438,6 +1504,9 @@ async function saveToSupabase(isSeed){
 // needing a manual refresh. Skips silently if nothing changed remotely.
 async function pollForRemoteChanges(){
   if(!SYNC_ENABLED) return;
+  // Never poll while a local edit is mid-save — otherwise we might pull
+  // the server's stale (pre-save) version and stomp on what you just typed.
+  if(isSaving || hasPendingSave) return;
   try{
     const rows = await sbRequest('GET');
     const row = rows && rows[0];
@@ -1481,6 +1550,7 @@ if(SYNC_ENABLED){
 }
 
 render();
+updateUndoButton();
 </script>
 </body>
 </html>
