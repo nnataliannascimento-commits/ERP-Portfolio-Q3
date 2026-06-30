@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Q3 2026 · ERP Integration Portfolio</title>
+<style>
+/* ── TOKENS ─────────────────────────────────────────────────────── */
+:root{
+  --ink:     #12110F;
+  --ink2:    #5C5A56;
+  --ink3:    #9C9A96;
+  --paper:   #FAFAF8;
+  --paper2:  #F1F0ED;
+  --paper3:  #E6E5E1;
+  --line:    rgba(0,0,0,.08);
+  --line2:   rgba(0,0,0,.16);
+  --radius:  6px;
+  --shadow:  0 1px 3px rgba(0,0,0,.10), 0 4px 12px rgba(0,0,0,.06);
+
+  /* Phase palette — each has bg/text/border */
+  --de-bg:#E8F0FF; --de-tx:#1A3A8F; --de-bd:#7BA4EF;
+  --dv-bg:#E6FAF0; --dv-tx:#0D5C33; --dv-bd:#52C484;
+  --te-bg:#FFF7E0; --te-tx:#7A5200; --te-bd:#F5C030;
+  --st-bg:#F5EAFF; --st-tx:#4A1590; --st-bd:#B88EF0;
+
+  /* Priority sidebar */
+  --p1:#D32F2F; --p2:#E64A19; --p3:#1565C0; --p4:#388E3C;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+body{ font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;
+      background:var(--paper); color:var(--ink); font-size:12px; }
+
+/* ── LAYOUT ─────────────────────────────────────────────────────── */
+#app{ display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+
+.topbar{
+  display:flex; align-items:center; gap:8px; padding:6px 14px;
+  background:#fff; border-bottom:.5px solid var(--line2);
+  flex-shrink:0; flex-wrap:wrap;
+}
+.topbar h1{ font-size:13px; font-weight:700; letter-spacing:-.3px; }
+.topbar .sub{ font-size:10px; color:var(--ink2); margin-left:4px; }
+.spacer{ flex:1; }
+.btn{
+  padding:4px 11px; font-size:10.5px; border-radius:20px; font-weight:500;
+  border:.5px solid var(--line2); background:var(--paper2); color:var(--ink);
+  cursor:pointer; transition:all .15s;
+}
+.btn:hover{ background:var(--paper3); }
+.btn.primary{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.btn.primary:hover{ background:#333; }
+.sync-status{
+  font-size:10px; font-weight:600; padding:3px 9px; border-radius:20px;
+  color:var(--ink3); transition:all .2s; white-space:nowrap;
+}
+.sync-status.live{ background:#E6FAF0; color:#0D5C33; }
+.sync-status.loading{ background:var(--paper2); color:var(--ink2); }
+.sync-status.error{ background:#FFF3E0; color:#B35900; }
+
+/* ── SQUAD TABS ── */
+.tabs-bar{
+  display:flex; gap:4px; padding:5px 14px; background:var(--paper2);
+  border-bottom:.5px solid var(--line); flex-shrink:0; flex-wrap:wrap;
+}
+.stab{
+  padding:3px 10px; font-size:10.5px; border-radius:20px; font-weight:500;
+  border:.5px solid var(--line2); background:transparent; color:var(--ink2);
+  cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.stab.on{ background:var(--ink); color:#fff; border-color:var(--ink); }
+
+/* ── LEGEND ── */
+.legend-bar{
+  display:flex; align-items:center; gap:5px; padding:4px 14px;
+  background:var(--paper2); border-bottom:.5px solid var(--line);
+  flex-shrink:0; flex-wrap:wrap;
+}
+.leg-person{
+  display:flex; align-items:center; gap:4px; font-size:11px; color:var(--ink2);
+  cursor:pointer; padding:2px 7px; border-radius:20px; border:.5px solid transparent;
+  user-select:none; transition:all .15s;
+}
+.leg-person:hover{ border-color:var(--line2); background:var(--paper); }
+.leg-person.muted{ opacity:.2; }
+.leg-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.leg-sep{ width:.5px; height:14px; background:var(--line2); margin:0 4px; }
+.leg-del{
+  margin-left:3px; font-size:13px; line-height:1; color:var(--ink3);
+  opacity:0; transition:opacity .12s, color .12s; cursor:pointer;
+  width:13px; height:13px; display:flex; align-items:center; justify-content:center;
+  border-radius:50%;
+}
+.leg-person:hover .leg-del{ opacity:1; }
+.leg-del:hover{ color:#fff; background:#D32F2F; }
+.leg-person.focused{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.leg-person.focused .leg-dot{ outline:1.5px solid #fff; }
+.leg-clear{
+  font-size:11px; padding:2px 9px; border-radius:20px; font-weight:600;
+  border:.5px solid var(--ink); background:var(--ink); color:#fff; cursor:pointer;
+}
+.leg-clear:hover{ opacity:.85; }
+.leg-quickadd{ display:flex; align-items:center; }
+.leg-quickadd input{
+  font-size:11px; padding:3px 9px; border-radius:20px;
+  border:.5px dashed var(--line2); background:var(--paper);
+  color:var(--ink); outline:none; width:120px; transition:all .15s;
+}
+.leg-quickadd input:focus{ border-color:var(--ink3); border-style:solid; width:140px; }
+.leg-quickadd input::placeholder{ color:var(--ink3); }
+.leg-phase{
+  display:flex; align-items:center; gap:4px; font-size:10px; color:var(--ink2);
+}
+.leg-phase-swatch{ width:24px; height:9px; border-radius:3px; }
+
+/* ── GANTT BODY ── */
+.gantt-outer{
+  flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0;
+}
+.gantt-head{
+  display:flex; flex-shrink:0; background:var(--paper2);
+  border-bottom:.5px solid var(--line2); position:sticky; top:0; z-index:20;
+}
+.gh-left{
+  flex-shrink:0; display:flex; align-items:center;
+  padding:0 8px; font-size:9px; font-weight:600; color:var(--ink2);
+  text-transform:uppercase; letter-spacing:.05em;
+  border-right:.5px solid var(--line2);
+}
+.gh-right{ flex:1; overflow:hidden; min-width:0; }
+.months-row{ display:flex; border-bottom:.5px solid var(--line); }
+.mhd{
+  flex-shrink:0; text-align:center; padding:3px 0; font-size:10px;
+  font-weight:700; color:var(--ink); border-right:.5px solid var(--line2);
+}
+.mhd:last-child{ border-right:none; }
+.weeks-row{ display:flex; }
+.whd{
+  flex-shrink:0; text-align:center; padding:2px 0; font-size:8px;
+  color:var(--ink3); border-right:.5px solid var(--line);
+}
+.whd:last-child{ border-right:none; }
+
+.gantt-scroll{ flex:1; overflow-y:auto; overflow-x:hidden; min-height:0; }
+.gantt-scroll-inner{ display:flex; flex-direction:column; }
+
+/* squad section divider */
+.squad-section-hd{
+  display:flex; align-items:center; gap:6px;
+  padding:3px 8px; background:var(--paper3);
+  border-bottom:.5px solid var(--line2); border-top:1px solid var(--line2);
+  font-size:9px; font-weight:700; color:var(--ink2);
+  text-transform:uppercase; letter-spacing:.05em;
+  position:sticky; top:0; z-index:8;
+}
+.squad-section-hd:first-child{ border-top:none; }
+.squad-count{
+  font-size:8px; font-weight:600; color:var(--ink3);
+  background:var(--paper); padding:1px 5px; border-radius:8px;
+}
+
+/* ── PROJECT ROW ── */
+.proj-row{
+  display:flex; border-bottom:.5px solid var(--line);
+  transition:background .1s;
+}
+.proj-row:hover{ background:rgba(0,0,0,.012); }
+
+.proj-label{
+  flex-shrink:0; display:flex; flex-direction:column; justify-content:center;
+  padding:3px 8px; border-right:.5px solid var(--line2);
+  border-left:3px solid #ccc;
+}
+.proj-label-clickable{ cursor:pointer; transition:background .12s; }
+.proj-label-clickable:hover{ background:var(--paper3); }
+.pname-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:4px; }
+.add-person-btn{
+  flex-shrink:0; width:14px; height:14px; border-radius:50%;
+  background:var(--paper3); color:var(--ink2); font-size:11px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; line-height:1;
+  cursor:pointer; transition:all .15s; margin-top:1px;
+}
+.add-person-btn:hover{ background:var(--ink); color:#fff; transform:scale(1.1); }
+
+/* Quick person-swap popover */
+.swap-pop{
+  position:fixed; z-index:300; background:#fff; border-radius:10px;
+  box-shadow:0 8px 28px rgba(0,0,0,.22); border:.5px solid var(--line2);
+  width:170px; padding:6px; font-size:11px;
+}
+.swap-pop-title{
+  font-size:9.5px; font-weight:700; color:var(--ink2); padding:4px 6px 6px;
+  text-transform:uppercase; letter-spacing:.04em;
+}
+.swap-pop-list{ max-height:200px; overflow-y:auto; }
+.swap-pop-item{
+  display:flex; align-items:center; gap:6px; padding:5px 7px; border-radius:6px;
+  cursor:pointer; font-weight:600; color:var(--ink); transition:background .1s;
+}
+.swap-pop-item:hover{ background:var(--paper2); }
+.swap-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.swap-pop-more{
+  margin-top:4px; padding:6px 7px; border-top:.5px solid var(--line);
+  font-size:10px; color:var(--ink2); cursor:pointer; border-radius:6px;
+}
+.swap-pop-more:hover{ background:var(--paper2); color:var(--ink); }
+.pname{
+  font-size:9.5px; font-weight:700; color:var(--ink); line-height:1.2;
+  margin-bottom:1px; overflow:hidden; text-overflow:ellipsis;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  flex:1; min-width:0;
+}
+.ptags{ display:flex; gap:2px; flex-wrap:wrap; align-items:center; margin-top:1px; }
+.badge{
+  font-size:7.5px; padding:0px 4px; border-radius:5px; font-weight:700;
+  white-space:nowrap; line-height:1.5;
+}
+.b-p1{ background:#FDECEA; color:var(--p1); }
+.b-p2{ background:#FBE9E7; color:var(--p2); }
+.b-p3{ background:#E3F2FD; color:var(--p3); }
+.b-p4{ background:#E8F5E9; color:var(--p4); }
+.b-dep{ background:#EDE7F6; color:#4527A0; }
+.psquad{ font-size:7.5px; color:var(--ink3); margin-top:1px; }
+
+/* ── TIMELINE ── */
+.proj-timeline{
+  flex:1; position:relative; overflow:hidden;
+}
+/* Phase band */
+.ph-band{
+  position:absolute; top:0; bottom:0;
+  pointer-events:none; z-index:0;
+}
+.ph-band-bg{
+  position:absolute; inset:0; opacity:.13;
+}
+.ph-divider{
+  position:absolute; top:0; bottom:0; width:1.5px;
+  background:rgba(0,0,0,.12); pointer-events:none; z-index:1;
+}
+.ph-label{
+  position:absolute; top:1px; font-size:6.5px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.04em; opacity:.45;
+  pointer-events:none; z-index:2; white-space:nowrap;
+}
+/* Grid lines */
+.vline-week{
+  position:absolute; top:0; bottom:0; width:.5px;
+  background:rgba(0,0,0,.13); pointer-events:none; z-index:1;
+}
+.vline-zebra{
+  position:absolute; top:0; bottom:0;
+  background:rgba(0,0,0,.025); pointer-events:none; z-index:0;
+}
+.vline-month{
+  position:absolute; top:0; bottom:0; width:1.5px;
+  background:rgba(0,0,0,.28); pointer-events:none; z-index:1;
+}
+/* Bars */
+.bar{
+  position:absolute; border-radius:4px; height:17px;
+  display:flex; align-items:center; gap:3px; padding:0 4px;
+  font-size:9px; font-weight:700; white-space:nowrap;
+  z-index:5; box-shadow:0 1px 2px rgba(0,0,0,.12);
+  cursor:grab; transition:box-shadow .15s, transform .1s;
+  user-select:none;
+}
+.bar:hover{
+  box-shadow:0 3px 8px rgba(0,0,0,.18);
+  transform:translateY(-1px); z-index:15;
+}
+.bar.dragging{
+  opacity:.75; cursor:grabbing; z-index:100;
+  box-shadow:0 6px 16px rgba(0,0,0,.25);
+}
+.bar.muted{ opacity:.08 !important; pointer-events:none; }
+.bar-content{
+  display:flex; align-items:center; gap:3px; overflow:hidden; flex:1; min-width:0;
+}
+.bar-av{
+  width:13px; height:13px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:7.5px; font-weight:700; background:rgba(255,255,255,.4);
+}
+.bar-x{
+  position:absolute; top:-6px; right:-5px;
+  width:13px; height:13px; border-radius:50%;
+  background:#D32F2F; color:#fff; font-size:10px; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; transition:opacity .12s, transform .1s; cursor:pointer;
+  z-index:20; box-shadow:0 1px 3px rgba(0,0,0,.3); flex-shrink:0;
+}
+.bar:hover .bar-x{ opacity:1; }
+.bar-x:hover{ transform:scale(1.15); }
+.bar-resize{
+  position:absolute; top:0; bottom:0; width:6px;
+  cursor:ew-resize; z-index:10;
+}
+.bar-resize-l{ left:-2px; }
+.bar-resize-r{ right:-2px; }
+.bar-resize:hover{ background:rgba(0,0,0,.18); border-radius:3px; }
+/* Add slot */
+.add-slot{
+  position:absolute; bottom:1px; right:2px;
+  font-size:7px; color:var(--ink3); cursor:pointer;
+  padding:0px 4px; border:.5px dashed var(--line2); border-radius:3px;
+  z-index:4; background:var(--paper); transition:all .15s; line-height:1.4;
+}
+.add-slot:hover{ color:var(--ink); border-color:var(--ink3); }
+
+/* ── ALLOCATION MODAL (button-triggered) ── */
+.alloc-modal{
+  width:560px; max-width:92vw; max-height:80vh;
+  display:flex; flex-direction:column;
+}
+.alloc-modal h3{ margin-bottom:.25rem; }
+.alloc-sub{ font-size:11px; color:var(--ink2); margin-bottom:.9rem; }
+.alloc-grid{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+  gap:8px; overflow-y:auto; padding-right:4px;
+}
+.alloc-card{
+  border:.5px solid var(--line2); border-radius:8px; padding:10px 12px;
+  background:var(--paper2);
+}
+.alloc-person{
+  display:flex; align-items:center; gap:6px; margin-bottom:6px;
+}
+.alloc-av{
+  width:20px; height:20px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:9px; font-weight:700; color:#fff;
+}
+.alloc-name{ font-size:12px; font-weight:700; color:var(--ink); }
+.alloc-count{
+  font-size:22px; font-weight:800; line-height:1; color:var(--ink);
+}
+.alloc-count-label{ font-size:9px; color:var(--ink2); text-transform:uppercase; letter-spacing:.04em; }
+.alloc-bar-row{ display:flex; gap:2px; margin-top:6px; height:5px; border-radius:3px; overflow:hidden; background:var(--paper3); }
+.alloc-bar-seg{ height:100%; }
+.alloc-card.heavy{ border-color:#F0B0A8; background:#FFF5F3; }
+.alloc-card.heavy .alloc-count{ color:#B71C1C; }
+
+/* ── MODAL ── */
+.overlay{
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,.35); z-index:500;
+  align-items:center; justify-content:center;
+}
+.overlay.open{ display:flex; }
+.modal{
+  background:#fff; border-radius:12px; padding:1.25rem 1.4rem;
+  width:300px; box-shadow:0 8px 40px rgba(0,0,0,.2);
+}
+.modal h3{ font-size:14px; font-weight:700; margin-bottom:.9rem; }
+.modal label{
+  display:block; font-size:10px; color:var(--ink2); margin-top:9px;
+  margin-bottom:2px; font-weight:600; text-transform:uppercase; letter-spacing:.05em;
+}
+.modal select, .modal input{
+  width:100%; font-size:12px; padding:6px 8px;
+  border:.5px solid var(--line2); border-radius:var(--radius);
+  background:var(--paper2); color:var(--ink); outline:none;
+}
+.modal select:focus, .modal input:focus{ border-color:#378ADD; }
+.mbtns{ display:flex; gap:7px; margin-top:1rem; }
+.mbtns button{
+  flex:1; font-size:11px; padding:7px 0; border-radius:var(--radius);
+  border:.5px solid var(--line2); background:transparent; color:var(--ink);
+  cursor:pointer; font-weight:500;
+}
+.mbtns button.ok{ background:var(--ink); color:#fff; border-color:var(--ink); }
+.mbtns button.danger{ color:#B71C1C; border-color:#FDECEA; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <h1>ERP Integration Portfolio</h1>
+    <span class="sub">Q3 2026 · July – September · 30 projects</span>
+    <span class="sync-status" id="syncStatus"></span>
+    <div class="spacer"></div>
+    <button class="btn" onclick="openAllocation()">📊 Allocation</button>
+    <button class="btn" onclick="openAddPerson()">+ Person</button>
+    <button class="btn primary" onclick="openAddProject()">+ Project</button>
+  </div>
+  <div class="tabs-bar" id="squadTabs"></div>
+  <div class="legend-bar" id="legendBar"></div>
+  <div class="gantt-outer">
+    <div class="gantt-head" id="ganttHead"></div>
+    <div class="gantt-scroll" id="ganttScroll">
+      <div class="gantt-scroll-inner" id="ganttInner"></div>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="overlay" onclick="bgClose(event)">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════════════════════════
+let DAY_PX     = 7.5;         // pixels per day — recalculated to fill viewport
+const TOTAL_D  = 91;          // July 1 → Sep 29
+const PROJ_W   = 110;         // left label width — compact
+const MONTH_D  = [31,31,29];  // days in Jul/Aug/Sep
+const MONTH_NM = ['July','August','September'];
+
+function recalcDayWidth(){
+  const outer = document.querySelector('.gantt-outer');
+  if(!outer) return;
+  const avail = outer.offsetWidth - PROJ_W - 4; // minus label col & scrollbar slack
+  DAY_PX = Math.max(4, avail / TOTAL_D);
+}
+
+const PHASES = ['Design','Dev','Test','Stab'];
+const PHASE_FULL = {Design:'Design',Dev:'Development',Test:'Testing',Stab:'Stabilization'};
+const PHASE_CSS  = {
+  Design:{bg:'#E8F0FF',tx:'#1A3A8F',bd:'#7BA4EF',icon:'✦'},
+  Dev:   {bg:'#E6FAF0',tx:'#0D5C33',bd:'#52C484',icon:'⚙'},
+  Test:  {bg:'#FFF7E0',tx:'#7A5200',bd:'#F5C030',icon:'◎'},
+  Stab:  {bg:'#F5EAFF',tx:'#4A1590',bd:'#B88EF0',icon:'▲'},
+};
+
+const PRIO_CLR  = {P1:'#C62828',P2:'#E64A19',P3:'#1565C0',P4:'#2E7D32','':'#B0AEA9'};
+
+// Person colours — 13 distinct
+const PC = [
+  {bg:'#DAEEFF',tx:'#003D7A',bd:'#5AAEE8'},  // Sumit
+  {bg:'#D4F5E6',tx:'#024D28',bd:'#3DB87A'},  // Everton
+  {bg:'#FFE0C8',tx:'#5C2000',bd:'#F0803C'},  // Vijay
+  {bg:'#EAE5FF',tx:'#2E1A8A',bd:'#9B8FE8'},  // Pallav
+  {bg:'#FFE0E8',tx:'#7A0E24',bd:'#F08090'},  // Mary
+  {bg:'#DCFAE0',tx:'#0A4F18',bd:'#50C464'},  // Natalia
+  {bg:'#FFF0C8',tx:'#5C3000',bd:'#E8B030'},  // Thalia
+  {bg:'#E0F8FF',tx:'#004058',bd:'#3AC0D8'},  // Fahad
+  {bg:'#F5E8FF',tx:'#3D0078',bd:'#A860E8'},  // Shreya
+  {bg:'#E8FFE8',tx:'#004000',bd:'#60D460'},  // Luis
+  {bg:'#FFE8D0',tx:'#5C1C00',bd:'#E87840'},  // Kira
+  {bg:'#E8F0FF',tx:'#002080',bd:'#6080E8'},  // Nestor
+  {bg:'#FFE0F8',tx:'#600050',bd:'#E060C0'},  // Visesh
+];
+
+// ═══════════════════════════════════════════════════════════════════
+//  PEOPLE
+// ═══════════════════════════════════════════════════════════════════
+let people = ['Sumit','Everton','Vijay','Pallav','Mary','Natalia',
+              'Thalia','Fahad','Shreya','Luis','Kira','Nestor','Visesh'];
+let muted  = {};
+let activePerson = null;
+
+function pc(name){
+  const i = people.indexOf(name);
+  return PC[i>=0 ? i % PC.length : 0];
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  PROJECT DATA — 30 Q3 projects from Asana
+// ═══════════════════════════════════════════════════════════════════
+// offset = day from Jul 1 when project STARTS (based on priority)
+// P1→0, P2→31 (Aug), P3→62 (Sep), P4→72, none→45
+// Phase sizes in days derived from hours: design15% dev55% test20% stab10%
+// minimum: design=3 dev=5 test=3 stab=2
+
+const RAW = [
+  // id, name (clean), squad, prio, coreApi, jd, hours
+  [1, 'Wholesale Return',                'Wholesale',              'P1',false,false,120],
+  [2, 'Inventory Details (Apparel RO)',  'Inventory Management',   'P2',false,false, 80],
+  [3, 'Account Receivable',              'Finance',                'P3',false,false, 60],
+  [4, 'Account Payment — Phase 2',       'Finance',                'P1',false,false,120],
+  [5, 'Inventory Details — Apparel',     'Inventory Management',   '' , false,false, 60],
+  [6, 'D2C Retail Store Subscription',   'Fulfillment & Logistics','P1',false,false,140],
+  [7, 'TT UK Seller Shipping',           'Fulfillment & Logistics','P2',false,false, 90],
+  [8, 'Account Payment — Jira+Proposal', 'Finance',                'P1',false,false,120],
+  [9, 'Account Payment — Prepayment',    'Finance',                'P1',false,false,120],
+  [10,'Account Payment — Auto Proposal', 'Finance',                'P1',false,false,120],
+  [11,'TJX (B2B)',                        'Wholesale',              'P2',false,false, 90],
+  [12,'Shipping Retention Phase 2',       'Customer Care',          '' ,false,false, 60],
+  [13,'JCPenney (Dropship)',              'Wholesale',              'P3',false,false, 60],
+  [14,'JCPenney (B2B)',                   'Wholesale',              'P1',false,false,120],
+  [15,'D2C Retail Stores',               'Wholesale',              'P1',false,false,212],
+  [16,'Avalara Phase 2',                 'Finance',                'P3',false,false, 22],
+  [17,'Burlington EDI Integration',      'Wholesale',              'P4',false,true,  96],
+  [18,'Refund Process Automation',       'Customer Care',          'P2',false,false, 60],
+  [19,'BazaarVoice Migration',           'Customer Care',          'P1',false,false, 80],
+  [20,'Amazon Germany',                  'Fulfillment & Logistics','P1',false,false,100],
+  [21,'ShipGoodies (API endpoint)',       'Wholesale',              'P3',true, false, 66],
+  [22,'Data Source & Accuracy Ph.2',     'Finance',                'P2',true, false, 96],
+  [23,'QVC EDI Integration',             'Wholesale',              'P1',false,true,  90],
+  [24,"Macy's E2E Fulfillment",          'Wholesale',              'P3',false,false, 70],
+  [25,'Reprocessed Orders Automation',   'Fulfillment & Logistics','P2',false,false, 90],
+  [26,'Wholesale Order Creation SBDX',   'Wholesale',              'P4',false,false, 52],
+  [27,'New 3PL Integration',             'Fulfillment & Logistics','P1',false,false,234],
+  [28,'B2B — Packing List Automation',   'Wholesale',              'P1',false,true, 150],
+  [29,'Enhancements & Automations',      'ERP & Integration',      'P2',true, true, 200],
+  [30,'BS Support',                      'ERP & Integration',      'P1',true, true, 160],
+];
+
+function phaseSize(hours){
+  const d = Math.max(5, Math.round(hours/6));
+  return [
+    Math.max(3, Math.round(d*.15)),  // design
+    Math.max(5, Math.round(d*.55)),  // dev
+    Math.max(3, Math.round(d*.20)),  // test
+    Math.max(2, Math.round(d*.10)),  // stab
+  ];
+}
+
+function baseOffset(prio){ return {P1:0,P2:31,P3:62,P4:72}[prio]??45; }
+
+// Squad stagger so P1 projects don't all pile on day 0
+const squadCursor = {};
+
+function defaultBars(squad, prio, phName, startD, endD, id){
+  const bars=[];
+  const add=(person,s,e)=>{
+    if(s>=TOTAL_D) return;
+    bars.push({person, startD:Math.min(s,TOTAL_D-1), endD:Math.min(e,TOTAL_D-1), id:Math.random()});
+  };
+  const s=startD, e=endD;
+
+  if(phName==='Design'){
+    // Leaders — first 2 weeks of design only
+    add('Sumit',  s, Math.min(s+13,e));
+    add('Everton',s, Math.min(s+13,e));
+    // Functional — Vijay on odd projects, Pallav on even (they split the load)
+    if(id%2===1) add('Vijay', s, e);
+    else         add('Pallav',s, e);
+  }
+  if(phName==='Dev'){
+    if(squad==='Wholesale')                                 add('Thalia',s,e);
+    if(id===6)                                              add('Shreya',s,e); // D2C Retail Store Sub
+    if(squad==='Finance' || /tt /i.test(''))                add('Fahad', s,e);
+    if(squad==='Inventory Management')                    { add('Nestor',s,e); }
+    if(squad==='Fulfillment & Logistics' && id!==6)         add('Visesh',s,e);
+    if(squad==='Customer Care')                             add('Visesh',s,e);
+    if(squad==='ERP & Integration')                       { add('Luis',s,e); add('Kira',s,e); }
+  }
+  if(phName==='Test'){
+    // Mary and Natalia split — Mary odd projects, Natalia even
+    if(id%2===1) add('Mary',   s,e);
+    else         add('Natalia',s,e);
+  }
+  if(phName==='Stab'){
+    if(id%2===1) add('Mary',   s,Math.min(s+6,e));
+    else         add('Natalia',s,Math.min(s+6,e));
+    add('Sumit',s,Math.min(s+4,e));
+  }
+  return bars;
+}
+
+function buildProject([id,name,squad,prio,coreApi,jd,hours]){
+  const sizes  = phaseSize(hours);
+  const sk     = squad+'_'+prio;
+  if(!squadCursor[sk]) squadCursor[sk] = baseOffset(prio);
+  let cursor   = squadCursor[sk];
+  squadCursor[sk] += 4; // stagger within same squad+prio
+
+  const phases = PHASES.map((ph,pi)=>{
+    const startD = Math.min(cursor, TOTAL_D-2);
+    const endD   = Math.min(cursor+sizes[pi]-1, TOTAL_D-1);
+    cursor      += sizes[pi];
+    return { ph, startD, endD, bars: defaultBars(squad,prio,ph,startD,endD,id) };
+  });
+  return {id,name,squad,prio,coreApi,jd,phases};
+}
+
+let projects = RAW.map(buildProject);
+
+const ALL_SQUADS = ['All',...[...new Set(RAW.map(r=>r[2]))]];
+let activeSquad  = 'All';
+let editState    = null;
+
+// ═══════════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════════
+let TW = TOTAL_D*DAY_PX;
+
+function visProjects(){
+  let list = activeSquad==='All' ? projects : projects.filter(p=>p.squad===activeSquad);
+  if(activePerson){
+    list = list.filter(proj=>
+      proj.phases.some(ph=>ph.bars.some(b=>b.person===activePerson))
+    );
+  }
+  return list;
+}
+
+function computeLanes(bars){
+  const lanes=[];
+  bars.forEach(b=>{
+    let placed=false;
+    for(let l=0;l<lanes.length;l++){
+      if(!lanes[l].some(x=>b.startD<=x.endD && b.endD>=x.startD)){
+        lanes[l].push(b); placed=true; break;
+      }
+    }
+    if(!placed) lanes.push([b]);
+  });
+  return lanes.length ? lanes : [[]];
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════════════
+function render(){
+  recalcDayWidth();
+  TW = TOTAL_D*DAY_PX;
+  renderTabs(); renderLegend(); renderHead(); renderBody();
+}
+
+function renderTabs(){
+  const el = document.getElementById('squadTabs');
+  el.innerHTML = ALL_SQUADS.map((s,i)=>`
+    <button class="stab ${s===activeSquad?'on':''}" data-squad-idx="${i}">
+      ${s==='All'?'🌐 All':s}
+    </button>`).join('');
+  el.querySelectorAll('button[data-squad-idx]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      setSquad(ALL_SQUADS[+btn.dataset.squadIdx]);
+    });
+  });
+}
+function setSquad(s){ activeSquad=s; render(); }
+
+function renderLegend(){
+  const el=document.getElementById('legendBar');
+  const pItems = people.map(p=>{
+    const c=pc(p);
+    const isFocused = activePerson===p;
+    return `<div class="leg-person ${muted[p]?'muted':''} ${isFocused?'focused':''}" data-person="${p.replace(/"/g,'&quot;')}" title="Click to focus ${p}'s allocation · Click × to remove">
+      <div class="leg-dot" style="background:${c.tx}"></div>${p}
+      <span class="leg-del" data-person-del="${p.replace(/"/g,'&quot;')}" title="Remove ${p}">×</span>
+    </div>`;
+  }).join('');
+  const phItems = PHASES.map(ph=>{
+    const s=PHASE_CSS[ph];
+    return `<div class="leg-phase">
+      <div class="leg-phase-swatch" style="background:${s.bg};border:1px solid ${s.bd}"></div>
+      <span>${s.icon} ${PHASE_FULL[ph]}</span>
+    </div>`;
+  }).join('');
+  const quickAdd = `<div class="leg-sep"></div>
+    <div class="leg-quickadd">
+      <input id="quickAddInput" type="text" placeholder="+ name, Enter" />
+    </div>`;
+  const clearFocus = activePerson ? `<button class="leg-clear" id="clearFocusBtn">✕ ${activePerson}</button>` : '';
+  el.innerHTML = pItems + quickAdd + clearFocus + '<div class="leg-sep"></div>' + phItems;
+
+  el.querySelectorAll('.leg-del').forEach(node=>{
+    node.addEventListener('click', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      removePerson(node.getAttribute('data-person-del'));
+    });
+  });
+  el.querySelectorAll('.leg-person').forEach(node=>{
+    node.addEventListener('click', (e)=>{
+      if(e.target.closest('.leg-del')) return;
+      focusPerson(node.getAttribute('data-person'));
+    });
+  });
+  const clearBtn = document.getElementById('clearFocusBtn');
+  if(clearBtn) clearBtn.addEventListener('click', ()=>{ activePerson=null; render(); });
+
+  const qa = document.getElementById('quickAddInput');
+  if(qa){
+    qa.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter'){
+        const name = qa.value.trim();
+        if(name && !people.includes(name)){
+          people.push(name);
+          render();
+          setTimeout(()=>{
+            const newQa = document.getElementById('quickAddInput');
+            if(newQa) newQa.focus();
+          },0);
+        } else {
+          qa.value='';
+        }
+      }
+    });
+  }
+}
+
+function focusPerson(name){
+  activePerson = (activePerson===name) ? null : name;
+  // when focusing a person, automatically un-mute everyone and dim others via CSS
+  render();
+}
+
+function removePerson(name){
+  if(!name) return;
+  const idx = people.indexOf(name);
+  if(idx===-1) return;
+  people.splice(idx,1);
+  delete muted[name];
+  if(activePerson===name) activePerson=null;
+  projects.forEach(proj=>{
+    proj.phases.forEach(ph=>{
+      ph.bars = ph.bars.filter(b=>b.person!==name);
+    });
+  });
+  render();
+}
+
+function renderHead(){
+  const head=document.getElementById('ganttHead');
+  const monthsH = MONTH_NM.map((m,i)=>
+    `<div class="mhd" style="width:${MONTH_D[i]*DAY_PX}px">${m} 2026</div>`
+  ).join('');
+  let weeksH='';
+  for(let d=0;d<TOTAL_D;d+=7){
+    const w=Math.min(7,TOTAL_D-d)*DAY_PX;
+    weeksH+=`<div class="whd" style="width:${w}px">W${Math.floor(d/7)+1}</div>`;
+  }
+  head.innerHTML=`
+    <div class="gh-left" style="width:${PROJ_W}px;min-width:${PROJ_W}px">Project</div>
+    <div class="gh-right" style="width:${TW}px">
+      <div class="months-row">${monthsH}</div>
+      <div class="weeks-row">${weeksH}</div>
+    </div>`;
+}
+
+function vlines(){
+  let h='';
+  // Subtle zebra striping per week so weekly structure reads at a glance,
+  // independent of the phase color bands.
+  for(let w=0; w*7<TOTAL_D; w++){
+    if(w%2===1){
+      const x = w*7*DAY_PX;
+      const width = Math.min(7,TOTAL_D-w*7)*DAY_PX;
+      h += `<div class="vline-zebra" style="left:${x}px;width:${width}px"></div>`;
+    }
+  }
+  for(let d=1;d<TOTAL_D;d++){
+    const x=d*DAY_PX;
+    if(d===31||d===62){
+      h+=`<div class="vline-month" style="left:${x}px"></div>`;
+    } else if(d%7===0){
+      h+=`<div class="vline-week" style="left:${x}px"></div>`;
+    }
+  }
+  return h;
+}
+
+function renderBody(){
+  const inner=document.getElementById('ganttInner');
+  inner.innerHTML='';
+  const vp=visProjects();
+
+  // Group by squad for clear sectioning (always, even when filtered to one squad)
+  const groups={};
+  vp.forEach(p=>{ (groups[p.squad]=groups[p.squad]||[]).push(p); });
+  const squadOrder=[...new Set(RAW.map(r=>r[2]))].filter(s=>groups[s]);
+
+  const PRIO_RANK = {P1:1,P2:2,P3:3,P4:4,'':5};
+  Object.values(groups).forEach(list=>{
+    list.sort((a,b)=>(PRIO_RANK[a.prio]??5)-(PRIO_RANK[b.prio]??5));
+  });
+
+  squadOrder.forEach(squadName=>{
+    const list=groups[squadName];
+
+    const hd=document.createElement('div');
+    hd.className='squad-section-hd';
+    hd.innerHTML=`<span>${squadName}</span><span class="squad-count">${list.length} project${list.length!==1?'s':''}</span>`;
+    inner.appendChild(hd);
+
+    list.forEach(proj=>{
+      // Compute lanes per phase: people whose date ranges overlap go on separate
+      // vertical lanes so you can see true parallel work, not squeezed side-by-side.
+      const phaseLanes = proj.phases.map(ph=>computeLanes(ph.bars));
+      const LANE_H = 18, LANE_GAP = 2, PAD = 3;
+      const phHeights = phaseLanes.map(l=>Math.max(l.length,1)*(LANE_H+LANE_GAP)-LANE_GAP + PAD*2);
+      const ROW_H = Math.max(...phHeights); // all phases share the same row height = tallest phase
+      const bcolor = PRIO_CLR[proj.prio]||PRIO_CLR[''];
+      const deps   = [proj.coreApi&&'Core API',proj.jd&&'JD'].filter(Boolean);
+
+      const row=document.createElement('div');
+      row.className='proj-row';
+      row.style.minHeight=ROW_H+'px';
+
+      const lbl=document.createElement('div');
+      lbl.className='proj-label';
+      lbl.style.cssText=`width:${PROJ_W}px;min-width:${PROJ_W}px;min-height:${ROW_H}px;border-left-color:${bcolor}`;
+      lbl.innerHTML=`
+        <div class="pname-row">
+          <span class="pname proj-label-clickable" title="${proj.name} · click to edit project">${proj.name}</span>
+          <span class="add-person-btn" title="Add person to this project">+</span>
+        </div>
+        <div class="ptags">
+          ${proj.prio?`<span class="badge b-${proj.prio.toLowerCase()}">${proj.prio}</span>`:''}
+          ${deps.map(d=>`<span class="badge b-dep" title="${d} dependency">🔗${d}</span>`).join('')}
+        </div>`;
+      lbl.querySelector('.pname').addEventListener('click', ()=>openEditProject(proj.id));
+      lbl.querySelector('.add-person-btn').addEventListener('click', ()=>openAddBar(proj.id));
+      row.appendChild(lbl);
+
+      const tl=document.createElement('div');
+      tl.className='proj-timeline';
+      tl.style.cssText=`width:${TW}px;min-height:${ROW_H}px;position:relative;overflow:hidden`;
+      tl.innerHTML=vlines();
+
+      proj.phases.forEach((ph,pi)=>{
+        const s=PHASE_CSS[ph.ph];
+        const x1=ph.startD*DAY_PX;
+        const bw=(ph.endD-ph.startD+1)*DAY_PX;
+
+        const bg=document.createElement('div');
+        bg.className='ph-band';
+        bg.style.cssText=`left:${x1}px;width:${bw}px;top:0;height:${ROW_H}px`;
+        bg.innerHTML=`<div class="ph-band-bg" style="background:${s.bg};border-left:2px solid ${s.bd}"></div>`;
+        tl.appendChild(bg);
+
+        if(pi>0){
+          const dv=document.createElement('div');
+          dv.className='ph-divider';
+          dv.style.cssText=`left:${x1}px;top:0;height:${ROW_H}px`;
+          tl.appendChild(dv);
+        }
+
+        // Real parallel lanes: overlapping bars stack vertically, non-overlapping
+        // bars (sequential people) reuse the same lane to stay compact.
+        const lanes = phaseLanes[pi];
+        lanes.forEach((lane,li)=>{
+          lane.forEach(bar=>{
+            const c=pc(bar.person);
+            const bx = bar.startD*DAY_PX;
+            const bwBar = Math.max((bar.endD-bar.startD+1)*DAY_PX-1, 15);
+            const by = PAD + li*(LANE_H+LANE_GAP);
+            const el=document.createElement('div');
+            const isDimmed = muted[bar.person] || (activePerson && bar.person!==activePerson);
+            el.className='bar'+(isDimmed?' muted':'');
+            el.style.cssText=`left:${bx}px;width:${bwBar}px;top:${by}px;height:${LANE_H}px;background:${c.bg};color:${c.tx};border:1px solid ${c.bd}`;
+            el.innerHTML=`<div class="bar-resize bar-resize-l" title="Drag to resize start"></div>`
+              +`<span class="bar-content">`
+                +`<span class="bar-av" style="background:${c.tx};color:#fff">${bar.person[0]}</span>`
+                +(bwBar>30?`<span>${bar.person}</span>`:'')
+              +`</span>`
+              +`<span class="bar-x" title="Remove ${bar.person} from ${PHASE_FULL[ph.ph]}">×</span>`
+              +`<div class="bar-resize bar-resize-r" title="Drag to resize end"></div>`;
+            el.title=`${bar.person} · ${PHASE_FULL[ph.ph]} · click name to swap person`;
+            el.dataset.projId  = proj.id;
+            el.dataset.phase   = ph.ph;
+            el.dataset.barId   = bar.id;
+            el.onclick=(e)=>{
+              if(justDragged) return;
+              if(e.target.classList.contains('bar-x')){
+                e.stopPropagation();
+                removeBar(proj.id, ph.ph, bar);
+                return;
+              }
+              if(e.target.classList.contains('bar-resize')) return;
+              if(e.target.closest('.bar-content')){
+                openSwapPerson(e, proj.id, ph.ph, bar);
+                return;
+              }
+              openEditBar(proj.id, ph.ph, bar);
+            };
+            el.addEventListener('mousedown', (e)=>{
+              if(e.target.classList.contains('bar-x')) return;
+              if(e.target.classList.contains('bar-resize-l')){ resizeStart(e, proj.id, ph.ph, bar, 'left'); return; }
+              if(e.target.classList.contains('bar-resize-r')){ resizeStart(e, proj.id, ph.ph, bar, 'right'); return; }
+              dragStart(e);
+            });
+            tl.appendChild(el);
+          });
+        });
+      });
+
+      row.appendChild(tl);
+      inner.appendChild(row);
+    });
+  });
+}
+
+function openAllocation(){
+  const vp=visProjects();
+  const counts={};
+  people.forEach(p=>counts[p]=new Set());
+
+  vp.forEach(proj=>{
+    proj.phases.forEach(ph=>{
+      ph.bars.forEach(b=>{
+        if(counts[b.person]) counts[b.person].add(proj.id);
+      });
+    });
+  });
+
+  const maxCount = Math.max(1,...people.map(p=>counts[p].size));
+
+  const cards = people.map(p=>{
+    const n = counts[p].size;
+    const c = pc(p);
+    const heavy = n>=4;
+    const pct = Math.round((n/maxCount)*100);
+    return `<div class="alloc-card ${heavy?'heavy':''}">
+      <div class="alloc-person">
+        <div class="alloc-av" style="background:${c.tx}">${p[0]}</div>
+        <div class="alloc-name">${p}</div>
+      </div>
+      <div class="alloc-count">${n}</div>
+      <div class="alloc-count-label">project${n!==1?'s':''} allocated</div>
+      <div class="alloc-bar-row"><div class="alloc-bar-seg" style="width:${pct}%;background:${heavy?'#D32F2F':c.tx}"></div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('modalBox').className='alloc-modal';
+  document.getElementById('modalBox').innerHTML=`
+    <h3>📊 Allocation by person</h3>
+    <p class="alloc-sub">${activeSquad==='All'?'All squads':activeSquad} · how many projects each person is currently on</p>
+    <div class="alloc-grid">${cards}</div>
+    <div class="mbtns"><button class="ok" onclick="closeModal()" style="flex:none;padding:7px 20px;margin-left:auto">Close</button></div>`;
+  document.getElementById('overlay').classList.add('open');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DRAG & DROP — move a person's bar along the timeline
+// ═══════════════════════════════════════════════════════════════════
+let dragState=null;
+let dragGhost=null;
+let justDragged=false;
+
+function dragStart(e){
+  if(e.button!==0) return;
+  const el=e.currentTarget;
+  const projId=+el.dataset.projId;
+  const phase=el.dataset.phase;
+  const barId=+el.dataset.barId;
+
+  const proj=projects.find(p=>p.id===projId);
+  const ph=proj?.phases.find(p=>p.ph===phase);
+  const bar=ph?.bars.find(b=>b.id===barId);
+  if(!bar) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const rect = el.getBoundingClientRect();
+  const span = bar.endD - bar.startD;
+
+  dragState={
+    el, proj, ph, bar, span,
+    startX:e.clientX,
+    origStartD:bar.startD,
+    moved:false,
+    elW: rect.width,
+  };
+
+  // Ghost: a floating copy that follows the cursor horizontally,
+  // staying within the timeline track so it's clear what's being moved.
+  dragGhost = el.cloneNode(true);
+  dragGhost.classList.add('dragging');
+  dragGhost.style.position='fixed';
+  dragGhost.style.pointerEvents='none';
+  dragGhost.style.zIndex='9999';
+  dragGhost.style.width=rect.width+'px';
+  dragGhost.style.left=rect.left+'px';
+  dragGhost.style.top=rect.top+'px';
+  dragGhost.style.opacity='.92';
+  document.body.appendChild(dragGhost);
+
+  el.style.opacity='.25';
+
+  document.addEventListener('mousemove',dragMove);
+  document.addEventListener('mouseup',dragEnd);
+}
+
+function dragMove(e){
+  if(!dragState) return;
+  const dx = e.clientX - dragState.startX;
+  if(Math.abs(dx) > 3) dragState.moved = true;
+
+  // Move only the ghost — cheap, no re-render, perfectly smooth
+  if(dragGhost){
+    const rect = dragState.el.getBoundingClientRect();
+    dragGhost.style.left = (rect.left + dx) + 'px';
+  }
+
+  // Snap preview to whole days for the tooltip
+  const dayDelta = Math.round(dx / DAY_PX);
+  const newStart = Math.max(0, Math.min(TOTAL_D-1-dragState.span, dragState.origStartD + dayDelta));
+  dragState.previewStartD = newStart;
+  if(dragGhost){
+    const w1 = Math.floor(newStart/7)+1;
+    const w2 = Math.floor((newStart+dragState.span)/7)+1;
+    dragGhost.title = `${dragState.bar.person} · W${w1}–W${w2}`;
+  }
+}
+
+function dragEnd(e){
+  if(!dragState) return;
+  const {bar, span, origStartD, moved, previewStartD} = dragState;
+
+  if(moved && previewStartD!=null){
+    bar.startD = previewStartD;
+    bar.endD   = Math.min(TOTAL_D-1, previewStartD + span);
+  }
+
+  dragState.el.style.opacity='';
+  if(dragGhost){ dragGhost.remove(); dragGhost=null; }
+  document.removeEventListener('mousemove',dragMove);
+  document.removeEventListener('mouseup',dragEnd);
+
+  justDragged = moved;
+  dragState=null;
+  renderBody();
+  if(justDragged) setTimeout(()=>{ justDragged=false; }, 50);
+}
+
+// ── Quick delete a single bar directly from the Gantt (no modal) ──
+function removeBar(projId, phaseName, bar){
+  const proj = projects.find(p=>p.id===projId);
+  const ph = proj?.phases.find(p=>p.ph===phaseName);
+  if(!ph) return;
+  const i = ph.bars.indexOf(bar);
+  if(i>=0) ph.bars.splice(i,1);
+  render();
+}
+
+// ── Quick person-swap popover: click a name in the Gantt to pick someone else ──
+function closeSwapPopover(){
+  const existing = document.getElementById('swapPopover');
+  if(existing) existing.remove();
+  document.removeEventListener('mousedown', swapOutsideClick, true);
+}
+function swapOutsideClick(e){
+  const pop = document.getElementById('swapPopover');
+  if(pop && !pop.contains(e.target)) closeSwapPopover();
+}
+
+function openSwapPerson(e, projId, phaseName, bar){
+  e.stopPropagation();
+  closeSwapPopover();
+
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.id='swapPopover';
+  pop.className='swap-pop';
+
+  const otherPeople = people.filter(p=>p!==bar.person);
+  pop.innerHTML = `
+    <div class="swap-pop-title">Swap ${bar.person} →</div>
+    <div class="swap-pop-list">
+      ${otherPeople.map(p=>{
+        const c=pc(p);
+        return `<div class="swap-pop-item" data-swap-to="${p.replace(/"/g,'&quot;')}">
+          <span class="swap-dot" style="background:${c.tx}"></span>${p}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="swap-pop-more" id="swapMoreBtn">⚙ Edit dates / phase…</div>
+  `;
+  document.body.appendChild(pop);
+
+  // Position near the bar, flipping if it would overflow the viewport
+  const popW = pop.offsetWidth, popH = pop.offsetHeight;
+  let left = rect.left;
+  let top  = rect.bottom + 4;
+  if(left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+  if(top + popH > window.innerHeight - 8) top = rect.top - popH - 4;
+  pop.style.left = left+'px';
+  pop.style.top  = top+'px';
+
+  pop.querySelectorAll('[data-swap-to]').forEach(item=>{
+    item.addEventListener('click', ()=>{
+      const newPerson = item.getAttribute('data-swap-to');
+      const proj=projects.find(p=>p.id===projId);
+      const ph=proj.phases.find(p=>p.ph===phaseName);
+      const target=ph.bars.find(b=>b===bar);
+      if(target) target.person = newPerson;
+      closeSwapPopover();
+      render();
+    });
+  });
+  document.getElementById('swapMoreBtn').addEventListener('click', ()=>{
+    closeSwapPopover();
+    openEditBar(projId, phaseName, bar);
+  });
+
+  setTimeout(()=>{ document.addEventListener('mousedown', swapOutsideClick, true); }, 0);
+}
+
+// ── Resize a bar's start or end edge by dragging its handle ──
+let resizeState=null;
+
+function resizeStart(e, projId, phaseName, bar, edge){
+  e.preventDefault();
+  e.stopPropagation();
+  const proj = projects.find(p=>p.id===projId);
+  const ph = proj?.phases.find(p=>p.ph===phaseName);
+  if(!ph) return;
+
+  resizeState = {
+    proj, ph, bar, edge,
+    startX: e.clientX,
+    origStartD: bar.startD,
+    origEndD: bar.endD,
+    moved:false,
+  };
+  document.addEventListener('mousemove', resizeMove);
+  document.addEventListener('mouseup', resizeEnd);
+}
+
+function resizeMove(e){
+  if(!resizeState) return;
+  const dx = e.clientX - resizeState.startX;
+  if(Math.abs(dx)>2) resizeState.moved=true;
+  const dayDelta = Math.round(dx/DAY_PX);
+  const {bar, edge, origStartD, origEndD} = resizeState;
+
+  if(edge==='left'){
+    const ns = Math.max(0, Math.min(origEndD, origStartD + dayDelta));
+    bar.startD = ns;
+  } else {
+    const ne = Math.max(origStartD, Math.min(TOTAL_D-1, origEndD + dayDelta));
+    bar.endD = ne;
+  }
+  renderBody();
+}
+
+function resizeEnd(){
+  document.removeEventListener('mousemove', resizeMove);
+  document.removeEventListener('mouseup', resizeEnd);
+  justDragged = resizeState?.moved || false;
+  resizeState = null;
+  renderBody();
+  if(justDragged) setTimeout(()=>{ justDragged=false; }, 50);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MODALS
+// ═══════════════════════════════════════════════════════════════════
+function openEditBar(projId,phase,bar){
+  editState={mode:'edit',projId,phase,bar:{...bar},orig:bar};showModal();
+}
+function openAddBar(projId,phase){
+  const proj = projects.find(p=>p.id===projId);
+  const defaultPhase = phase || 'Design';
+  const ph = proj?.phases.find(p=>p.ph===defaultPhase);
+  const defStart = ph ? ph.startD : 0;
+  const defEnd   = ph ? ph.endD   : 6;
+  editState={mode:'add',projId,phase:defaultPhase,bar:{person:people[0],startD:defStart,endD:defEnd,id:Math.random()}};showModal();
+}
+function openAddProject(){ editState={mode:'newProj'}; showModal(); }
+function openEditProject(projId){
+  const proj = projects.find(p=>p.id===projId);
+  if(!proj) return;
+  editState={mode:'editProj', projId, name:proj.name, squad:proj.squad, prio:proj.prio, coreApi:proj.coreApi, jd:proj.jd};
+  showModal();
+}
+function openAddPerson(){  editState={mode:'newPerson'}; showModal(); }
+
+// Convert day-index (0-90) <-> {month, dayOfMonth} for human-friendly pickers
+const MONTH_STARTS_D = [0, 31, 62]; // Jul=0, Aug=31, Sep=62
+function dToMonthDay(d){
+  let mi = 2;
+  if(d < 31) mi = 0; else if(d < 62) mi = 1;
+  return { mi, day: d - MONTH_STARTS_D[mi] + 1 };
+}
+function monthDayToD(mi, day){
+  return Math.max(0, Math.min(TOTAL_D-1, MONTH_STARTS_D[mi] + (day-1)));
+}
+
+function dateOpts(selD, idPrefix){
+  // Two linked selects rendered as one string: a month select + day select
+  const md = dToMonthDay(selD);
+  const monthSel = MONTH_NM.map((m,i)=>
+    `<option value="${i}" ${i===md.mi?'selected':''}>${m}</option>`
+  ).join('');
+  const dayCount = MONTH_D[md.mi];
+  const daySel = Array.from({length:dayCount},(_,i)=>{
+    const dayNum=i+1;
+    return `<option value="${dayNum}" ${dayNum===md.day?'selected':''}>${dayNum}</option>`;
+  }).join('');
+  return `<div style="display:flex;gap:6px">
+    <select id="${idPrefix}_mo" style="flex:1.3" onchange="refreshDayOptions('${idPrefix}')">${monthSel}</select>
+    <select id="${idPrefix}_day" style="flex:1">${daySel}</select>
+  </div>`;
+}
+
+function refreshDayOptions(idPrefix){
+  const mi = +document.getElementById(idPrefix+'_mo').value;
+  const dayCount = MONTH_D[mi];
+  const daySel = document.getElementById(idPrefix+'_day');
+  const cur = +daySel.value;
+  daySel.innerHTML = Array.from({length:dayCount},(_,i)=>{
+    const dayNum=i+1;
+    return `<option value="${dayNum}" ${dayNum===Math.min(cur,dayCount)?'selected':''}>${dayNum}</option>`;
+  }).join('');
+}
+
+function readDateOpt(idPrefix){
+  const mi = +document.getElementById(idPrefix+'_mo').value;
+  const day = +document.getElementById(idPrefix+'_day').value;
+  return monthDayToD(mi, day);
+}
+
+function phOpts(sel){
+  return PHASES.map(ph=>`<option value="${ph}" ${ph===sel?'selected':''}>${PHASE_CSS[ph].icon} ${PHASE_FULL[ph]}</option>`).join('');
+}
+function pOpts(sel){
+  return people.map(p=>`<option value="${p}" ${p===sel?'selected':''}>${p}</option>`).join('');
+}
+
+function showModal(){
+  document.getElementById('modalBox').className='modal';
+  const s=editState;
+  const proj=s.projId?projects.find(p=>p.id===s.projId):null;
+  const phStyle=s.phase?PHASE_CSS[s.phase]:{};
+  let inner='';
+
+  if(s.mode==='newPerson'){
+    inner=`<h3>Add person</h3>
+    <label>Name</label><input id="m_name" placeholder="First name">
+    <div class="mbtns"><button onclick="closeModal()">Cancel</button><button class="ok" onclick="savePerson()">Add</button></div>`;
+
+  } else if(s.mode==='newProj'){
+    const sqOpts=[...new Set(RAW.map(r=>r[2]))].map(sq=>`<option>${sq}</option>`).join('');
+    const prOpts=['P1','P2','P3','P4',''].map(p=>`<option value="${p}">${p||'—'}</option>`).join('');
+    inner=`<h3>New project</h3>
+    <label>Name</label><input id="m_pname" placeholder="Project name">
+    <label>Squad</label><select id="m_squad">${sqOpts}</select>
+    <label>Priority</label><select id="m_prio">${prOpts}</select>
+    <label>Estimated hours</label><input id="m_hours" type="number" value="80" min="8">
+    <div class="mbtns"><button onclick="closeModal()">Cancel</button><button class="ok" onclick="saveNewProj()">Create</button></div>`;
+
+  } else if(s.mode==='editProj'){
+    const allSquads=[...new Set(RAW.map(r=>r[2]))];
+    if(!allSquads.includes(s.squad)) allSquads.push(s.squad);
+    const sqOpts=allSquads.map(sq=>`<option ${sq===s.squad?'selected':''}>${sq}</option>`).join('');
+    const prOpts=['P1','P2','P3','P4',''].map(p=>`<option value="${p}" ${p===s.prio?'selected':''}>${p||'—'}</option>`).join('');
+    inner=`<h3>Edit project</h3>
+    <label>Name</label><input id="m_pname2" value="${s.name.replace(/"/g,'&quot;')}">
+    <label>Squad</label><select id="m_squad2">${sqOpts}</select>
+    <label>Priority</label><select id="m_prio2">${prOpts}</select>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:10px;text-transform:none;font-weight:500">
+      <input type="checkbox" id="m_coreapi2" ${s.coreApi?'checked':''} style="width:auto"> Depends on Core API
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:6px;text-transform:none;font-weight:500">
+      <input type="checkbox" id="m_jd2" ${s.jd?'checked':''} style="width:auto"> Depends on JD
+    </label>
+    <div class="mbtns">
+      <button class="danger" onclick="deleteProject()">Delete project</button>
+      <button class="ok" onclick="saveEditProject()">Save</button>
+    </div>`;
+
+  } else {
+    inner=`<h3>${s.mode==='add'?'Assign person':'Edit allocation'}</h3>
+    ${proj?`<p style="font-size:10px;color:var(--ink2);margin-bottom:6px;font-weight:500">${proj.name}</p>`:''}
+    <label>Person</label><select id="m_person">${pOpts(s.bar.person)}</select>
+    <label>Phase</label><select id="m_phase">${phOpts(s.phase)}</select>
+    <label>Start date</label>${dateOpts(s.bar.startD,'m_st')}
+    <label>End date</label>${dateOpts(s.bar.endD,'m_en')}
+    <div class="mbtns">
+      ${s.mode==='edit'?`<button class="danger" onclick="deleteBar()">Remove</button>`
+                       :`<button onclick="closeModal()">Cancel</button>`}
+      <button class="ok" onclick="saveBar()">Save</button>
+    </div>`;
+  }
+  document.getElementById('modalBox').innerHTML=inner;
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeModal(){
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('modalBox').className='modal';
+  editState=null;
+}
+function bgClose(e){ if(e.target===document.getElementById('overlay')) closeModal(); }
+
+function saveBar(){
+  const s=editState;
+  const person=document.getElementById('m_person').value;
+  const newPhase=document.getElementById('m_phase').value;
+  const startD=readDateOpt('m_st');
+  const endD=readDateOpt('m_en');
+  if(endD<startD) return;
+  const proj=projects.find(p=>p.id===s.projId);
+  const oldPh=proj.phases.find(p=>p.ph===s.phase);
+  const targetPh=proj.phases.find(p=>p.ph===newPhase);
+
+  if(s.mode==='edit'){
+    // remove from the old phase (in case phase changed) then add to target phase
+    const i=oldPh.bars.indexOf(s.orig);
+    if(i>=0) oldPh.bars.splice(i,1);
+    targetPh.bars.push({...s.orig, person, startD, endD});
+  } else {
+    targetPh.bars.push({person,startD,endD,id:Math.random()});
+  }
+  closeModal(); render();
+}
+function deleteBar(){
+  const s=editState;
+  const proj=projects.find(p=>p.id===s.projId);
+  const ph=proj.phases.find(p=>p.ph===s.phase);
+  const i=ph.bars.indexOf(s.orig);
+  if(i>=0) ph.bars.splice(i,1);
+  closeModal(); render();
+}
+function savePerson(){
+  const n=document.getElementById('m_name').value.trim();
+  if(n&&!people.includes(n)) people.push(n);
+  closeModal(); render();
+}
+function saveNewProj(){
+  const name=document.getElementById('m_pname').value.trim()||'New Project';
+  const squad=document.getElementById('m_squad').value;
+  const prio=document.getElementById('m_prio').value;
+  const hours=parseInt(document.getElementById('m_hours').value)||80;
+  const id=Math.max(...projects.map(p=>p.id))+1;
+  projects.push(buildProject([id,name,squad,prio,false,false,hours]));
+  if(!ALL_SQUADS.includes(squad)) ALL_SQUADS.push(squad);
+  closeModal(); render();
+}
+
+function saveEditProject(){
+  const s=editState;
+  const proj=projects.find(p=>p.id===s.projId);
+  if(!proj) return;
+  proj.name = document.getElementById('m_pname2').value.trim() || proj.name;
+  proj.squad = document.getElementById('m_squad2').value;
+  proj.prio  = document.getElementById('m_prio2').value;
+  proj.coreApi = document.getElementById('m_coreapi2').checked;
+  proj.jd = document.getElementById('m_jd2').checked;
+  if(!ALL_SQUADS.includes(proj.squad)) ALL_SQUADS.push(proj.squad);
+  closeModal(); render();
+}
+
+function deleteProject(){
+  const s=editState;
+  const idx=projects.findIndex(p=>p.id===s.projId);
+  if(idx>=0) projects.splice(idx,1);
+  closeModal(); render();
+}
+
+let resizeTimer;
+window.addEventListener('resize', ()=>{
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(()=>{ recalcDayWidth(); TW=TOTAL_D*DAY_PX; renderHead(); renderBody(); }, 120);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  SUPABASE SYNC — shared live state across everyone with the link
+// ═══════════════════════════════════════════════════════════════════
+// Fill these in with your own Supabase project's values (Settings → API).
+// They're safe to leave visible in the file — the anon key is meant for
+// browser use and access is restricted by the policies you set up in SQL.
+const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';
+const SUPABASE_ROW_ID = 'q3_2026';
+const SYNC_ENABLED = SUPABASE_URL.indexOf('YOUR_SUPABASE') === -1;
+
+let syncStatusEl = null;
+let lastSavedSnapshot = '';
+let applyingRemoteUpdate = false;
+
+function setSyncStatus(text, kind){
+  if(!syncStatusEl) return;
+  syncStatusEl.textContent = text;
+  syncStatusEl.className = 'sync-status ' + (kind||'');
+}
+
+function snapshotState(){
+  return { people, projects, muted, activeSquad, activePerson, ALL_SQUADS };
+}
+
+async function sbRequest(method, body){
+  const url = `${SUPABASE_URL}/rest/v1/board_state?id=eq.${SUPABASE_ROW_ID}`;
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+  };
+  if(method==='PATCH') headers['Prefer'] = 'return=minimal';
+  const res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  if(!res.ok) throw new Error('Supabase request failed: '+res.status);
+  return method==='GET' ? res.json() : null;
+}
+
+async function loadFromSupabase(){
+  if(!SYNC_ENABLED) return;
+  try{
+    setSyncStatus('Loading shared board…', 'loading');
+    const rows = await sbRequest('GET');
+    const row = rows && rows[0];
+    if(row && row.data && Object.keys(row.data).length){
+      applyingRemoteUpdate = true;
+      people       = row.data.people       ?? people;
+      projects     = row.data.projects     ?? projects;
+      muted        = row.data.muted        ?? muted;
+      activeSquad  = row.data.activeSquad  ?? activeSquad;
+      activePerson = row.data.activePerson ?? activePerson;
+      if(row.data.ALL_SQUADS){
+        ALL_SQUADS.length = 0;
+        row.data.ALL_SQUADS.forEach(s=>ALL_SQUADS.push(s));
+      }
+      applyingRemoteUpdate = false;
+      lastSavedSnapshot = JSON.stringify(snapshotState());
+      render();
+    } else {
+      // First time ever — seed the row with our current local data
+      await saveToSupabase(true);
+    }
+    setSyncStatus('● Live — synced with team', 'live');
+  } catch(err){
+    console.error(err);
+    setSyncStatus('⚠ Sync unavailable — working locally', 'error');
+  }
+}
+
+let saveDebounce;
+function scheduleSave(){
+  if(!SYNC_ENABLED || applyingRemoteUpdate) return;
+  clearTimeout(saveDebounce);
+  setSyncStatus('Saving…', 'loading');
+  saveDebounce = setTimeout(()=>saveToSupabase(false), 500);
+}
+
+async function saveToSupabase(isSeed){
+  if(!SYNC_ENABLED) return;
+  const snap = snapshotState();
+  const json = JSON.stringify(snap);
+  if(!isSeed && json===lastSavedSnapshot) { setSyncStatus('● Live — synced with team', 'live'); return; }
+  try{
+    await sbRequest('PATCH', { data: snap, updated_at: new Date().toISOString() });
+    lastSavedSnapshot = json;
+    setSyncStatus('● Live — synced with team', 'live');
+  } catch(err){
+    console.error(err);
+    setSyncStatus('⚠ Save failed — check connection', 'error');
+  }
+}
+
+// Poll every few seconds so everyone sees each other's edits without
+// needing a manual refresh. Skips silently if nothing changed remotely.
+async function pollForRemoteChanges(){
+  if(!SYNC_ENABLED) return;
+  try{
+    const rows = await sbRequest('GET');
+    const row = rows && rows[0];
+    if(!row || !row.data) return;
+    const remoteJson = JSON.stringify(row.data);
+    const localJson = JSON.stringify(snapshotState());
+    if(remoteJson !== localJson && remoteJson !== lastSavedSnapshot){
+      applyingRemoteUpdate = true;
+      people       = row.data.people       ?? people;
+      projects     = row.data.projects     ?? projects;
+      muted        = row.data.muted        ?? muted;
+      activeSquad  = row.data.activeSquad  ?? activeSquad;
+      activePerson = row.data.activePerson ?? activePerson;
+      if(row.data.ALL_SQUADS){
+        ALL_SQUADS.length = 0;
+        row.data.ALL_SQUADS.forEach(s=>ALL_SQUADS.push(s));
+      }
+      applyingRemoteUpdate = false;
+      lastSavedSnapshot = remoteJson;
+      render();
+      setSyncStatus('● Live — updated by teammate', 'live');
+    }
+  } catch(err){
+    // stay quiet on transient poll errors
+  }
+}
+
+// Wrap render() so every local change auto-saves to Supabase
+const _originalRender = render;
+render = function(){
+  _originalRender();
+  scheduleSave();
+};
+
+if(SYNC_ENABLED){
+  setTimeout(()=>{
+    syncStatusEl = document.getElementById('syncStatus');
+    loadFromSupabase();
+    setInterval(pollForRemoteChanges, 4000);
+  }, 0);
+}
+
+render();
+</script>
+</body>
+</html>
