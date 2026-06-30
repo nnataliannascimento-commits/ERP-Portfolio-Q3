@@ -72,6 +72,24 @@ body{ font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif
 }
 .stab.on{ background:var(--ink); color:#fff; border-color:var(--ink); }
 
+/* ── STATUS FILTER BAR ── */
+.status-bar{
+  display:flex; gap:5px; padding:5px 14px; background:var(--paper);
+  border-bottom:.5px solid var(--line); flex-shrink:0; flex-wrap:wrap;
+}
+.status-chip{
+  display:flex; align-items:center; gap:5px; padding:3px 6px 3px 11px;
+  font-size:10.5px; border-radius:20px; font-weight:600;
+  border:1px solid var(--line2); background:transparent; color:var(--ink2);
+  cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.status-chip.on{ font-weight:700; }
+.status-chip:hover{ filter:brightness(.97); }
+.status-chip-count{
+  font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:10px;
+  background:var(--paper3); color:var(--ink2); min-width:16px; text-align:center;
+}
+
 /* ── LEGEND ── */
 .legend-bar{
   display:flex; align-items:center; gap:5px; padding:4px 14px;
@@ -112,8 +130,12 @@ body{ font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif
 .leg-quickadd input::placeholder{ color:var(--ink3); }
 .leg-phase{
   display:flex; align-items:center; gap:4px; font-size:10px; color:var(--ink2);
+  padding:3px 9px; border-radius:20px; border:1px solid transparent;
+  background:transparent; cursor:pointer; transition:all .15s; font-weight:600;
 }
-.leg-phase-swatch{ width:24px; height:9px; border-radius:3px; }
+.leg-phase:hover{ background:var(--paper2); }
+.leg-phase.on{ font-weight:700; }
+.leg-phase-swatch{ width:18px; height:9px; border-radius:3px; flex-shrink:0; }
 
 /* ── GANTT BODY ── */
 .gantt-outer{
@@ -387,6 +409,7 @@ body{ font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif
     <button class="btn primary" onclick="openAddProject()">+ Project</button>
   </div>
   <div class="tabs-bar" id="squadTabs"></div>
+  <div class="status-bar" id="statusBar"></div>
   <div class="legend-bar" id="legendBar"></div>
   <div class="gantt-outer">
     <div class="gantt-head" id="ganttHead"></div>
@@ -416,16 +439,25 @@ function recalcDayWidth(){
   DAY_PX = Math.max(4, avail / TOTAL_D);
 }
 
-const PHASES = ['Design','Dev','Test','Stab'];
-const PHASE_FULL = {Design:'Design',Dev:'Development',Test:'Testing',Stab:'Stabilization'};
+const PHASES = ['Design','Dev','Test','Stab','FuncSupport'];
+const PHASE_FULL = {Design:'Design',Dev:'Development',Test:'Testing',Stab:'Stabilization',FuncSupport:'Functional Support'};
 const PHASE_CSS  = {
   Design:{bg:'#E8F0FF',tx:'#1A3A8F',bd:'#7BA4EF',icon:'✦'},
   Dev:   {bg:'#E6FAF0',tx:'#0D5C33',bd:'#52C484',icon:'⚙'},
   Test:  {bg:'#FFF7E0',tx:'#7A5200',bd:'#F5C030',icon:'◎'},
   Stab:  {bg:'#F5EAFF',tx:'#4A1590',bd:'#B88EF0',icon:'▲'},
+  FuncSupport:{bg:'#FFEBF3',tx:'#8A1457',bd:'#F08CC0',icon:'◆'},
 };
 
 const PRIO_CLR  = {P1:'#C62828',P2:'#E64A19',P3:'#1565C0',P4:'#2E7D32','':'#B0AEA9'};
+
+const STATUSES = ['Not started','In progress','On hold','Blocked'];
+const STATUS_CSS = {
+  'Not started': {bg:'#F1F0ED',tx:'#6B6B67',bd:'#D5D3CD'},
+  'In progress': {bg:'#E1F5EE',tx:'#0D5C33',bd:'#7FD4A8'},
+  'On hold':     {bg:'#FFF3E0',tx:'#B35900',bd:'#F5B868'},
+  'Blocked':     {bg:'#FDECEA',tx:'#B71C1C',bd:'#EF9A9A'},
+};
 
 // Person colours — 13 distinct
 const PC = [
@@ -450,7 +482,8 @@ const PC = [
 let people = ['Sumit','Everton','Vijay','Pallav','Mary','Natalia',
               'Thalia','Fahad','Shreya','Luis','Kira','Nestor','Visesh'];
 let muted  = {};
-let activePerson = null;
+let activePersons = []; // array of selected person names; empty = show everyone
+let activePhase = null; // single phase filter, e.g. 'Dev' — shows only that phase's bars
 
 function pc(name){
   const i = people.indexOf(name);
@@ -503,9 +536,10 @@ function phaseSize(hours){
   const d = Math.max(5, Math.round(hours/6));
   return [
     Math.max(3, Math.round(d*.15)),  // design
-    Math.max(5, Math.round(d*.55)),  // dev
-    Math.max(3, Math.round(d*.20)),  // test
-    Math.max(2, Math.round(d*.10)),  // stab
+    Math.max(5, Math.round(d*.50)),  // dev
+    Math.max(3, Math.round(d*.18)),  // test
+    Math.max(2, Math.round(d*.09)),  // stab
+    Math.max(2, Math.round(d*.08)),  // functional support
   ];
 }
 
@@ -552,7 +586,7 @@ function defaultBars(squad, prio, phName, startD, endD, id){
   return bars;
 }
 
-function buildProject([id,name,squad,prio,coreApi,jd,hours]){
+function buildProject([id,name,squad,prio,coreApi,jd,hours,status]){
   const sizes  = phaseSize(hours);
   const sk     = squad+'_'+prio;
   if(!squadCursor[sk]) squadCursor[sk] = baseOffset(prio);
@@ -565,13 +599,14 @@ function buildProject([id,name,squad,prio,coreApi,jd,hours]){
     cursor      += sizes[pi];
     return { ph, startD, endD, bars: defaultBars(squad,prio,ph,startD,endD,id) };
   });
-  return {id,name,squad,prio,coreApi,jd,phases};
+  return {id,name,squad,prio,coreApi,jd,status:status||'In progress',phases};
 }
 
 let projects = RAW.map(buildProject);
 
 const ALL_SQUADS = ['All',...[...new Set(RAW.map(r=>r[2]))]];
 let activeSquad  = 'All';
+let activeStatus = 'All';
 let editState    = null;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -581,9 +616,12 @@ let TW = TOTAL_D*DAY_PX;
 
 function visProjects(){
   let list = activeSquad==='All' ? projects : projects.filter(p=>p.squad===activeSquad);
-  if(activePerson){
+  if(activeStatus!=='All'){
+    list = list.filter(p=>(p.status||'In progress')===activeStatus);
+  }
+  if(activePersons.length){
     list = list.filter(proj=>
-      proj.phases.some(ph=>ph.bars.some(b=>b.person===activePerson))
+      proj.phases.some(ph=>ph.bars.some(b=>activePersons.includes(b.person)))
     );
   }
   return list;
@@ -612,7 +650,7 @@ const UNDO_LIMIT = 50;
 function pushUndoSnapshot(){
   undoStack.push(JSON.stringify({
     people: people, projects: projects, muted: muted,
-    activeSquad: activeSquad, activePerson: activePerson,
+    activeSquad: activeSquad, activePersons: activePersons,
   }));
   if(undoStack.length > UNDO_LIMIT) undoStack.shift();
   updateUndoButton();
@@ -625,7 +663,7 @@ function undoLastAction(){
   projects     = snap.projects;
   muted        = snap.muted;
   activeSquad  = snap.activeSquad;
-  activePerson = snap.activePerson;
+  activePersons = snap.activePersons || [];
   updateUndoButton();
   render();
 }
@@ -649,7 +687,7 @@ document.addEventListener('keydown', (e)=>{
 function render(){
   recalcDayWidth();
   TW = TOTAL_D*DAY_PX;
-  renderTabs(); renderLegend(); renderHead(); renderBody();
+  renderTabs(); renderStatusBar(); renderLegend(); renderHead(); renderBody();
 }
 
 function renderTabs(){
@@ -666,28 +704,61 @@ function renderTabs(){
 }
 function setSquad(s){ activeSquad=s; render(); }
 
+function renderStatusBar(){
+  const el = document.getElementById('statusBar');
+  if(!el) return;
+  // Count within the current squad filter, ignoring the status filter itself,
+  // so the counts stay meaningful as you click between status buttons.
+  const squadFiltered = activeSquad==='All' ? projects : projects.filter(p=>p.squad===activeSquad);
+  const countFor = (st) => st==='All' ? squadFiltered.length
+    : squadFiltered.filter(p=>(p.status||'In progress')===st).length;
+
+  const allBtn = `<button class="status-chip ${activeStatus==='All'?'on':''}" data-status="All">
+      All <span class="status-chip-count">${countFor('All')}</span>
+    </button>`;
+
+  const statusBtns = STATUSES.map(st=>{
+    const css = STATUS_CSS[st];
+    const isOn = activeStatus===st;
+    return `<button class="status-chip ${isOn?'on':''}" data-status="${st}" style="${isOn?`background:${css.tx};border-color:${css.tx};color:#fff`:`color:${css.tx};border-color:${css.bd}`}">
+      ${st} <span class="status-chip-count" style="${isOn?'background:rgba(255,255,255,.25);color:#fff':`background:${css.bg};color:${css.tx}`}">${countFor(st)}</span>
+    </button>`;
+  }).join('');
+
+  el.innerHTML = allBtn + statusBtns;
+  el.querySelectorAll('[data-status]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      activeStatus = btn.getAttribute('data-status');
+      render();
+    });
+  });
+}
+
 function renderLegend(){
   const el=document.getElementById('legendBar');
   const pItems = people.map(p=>{
     const c=pc(p);
-    const isFocused = activePerson===p;
-    return `<div class="leg-person ${muted[p]?'muted':''} ${isFocused?'focused':''}" data-person="${p.replace(/"/g,'&quot;')}" title="Click to focus ${p}'s allocation · Click × to remove">
+    const isFocused = activePersons.includes(p);
+    return `<div class="leg-person ${muted[p]?'muted':''} ${isFocused?'focused':''}" data-person="${p.replace(/"/g,'&quot;')}" title="Click to select ${p} (toggle multi-select) · Click × to remove">
       <div class="leg-dot" style="background:${c.tx}"></div>${p}
       <span class="leg-del" data-person-del="${p.replace(/"/g,'&quot;')}" title="Remove ${p}">×</span>
     </div>`;
   }).join('');
   const phItems = PHASES.map(ph=>{
     const s=PHASE_CSS[ph];
-    return `<div class="leg-phase">
-      <div class="leg-phase-swatch" style="background:${s.bg};border:1px solid ${s.bd}"></div>
+    const isOn = activePhase===ph;
+    return `<button class="leg-phase ${isOn?'on':''}" data-phase="${ph}" style="${isOn?`background:${s.tx};border-color:${s.tx};color:#fff`:`border-color:${s.bd}`}">
+      <div class="leg-phase-swatch" style="background:${isOn?'rgba(255,255,255,.5)':s.bg};border:1px solid ${isOn?'#fff':s.bd}"></div>
       <span>${s.icon} ${PHASE_FULL[ph]}</span>
-    </div>`;
+    </button>`;
   }).join('');
   const quickAdd = `<div class="leg-sep"></div>
     <div class="leg-quickadd">
       <input id="quickAddInput" type="text" placeholder="+ name, Enter" />
     </div>`;
-  const clearFocus = activePerson ? `<button class="leg-clear" id="clearFocusBtn">✕ ${activePerson}</button>` : '';
+  const clearFocus = activePersons.length
+    ? `<button class="leg-clear" id="clearFocusBtn">✕ ${activePersons.length===1?activePersons[0]:activePersons.length+' selected'}</button>`
+    : '';
   el.innerHTML = pItems + quickAdd + clearFocus + '<div class="leg-sep"></div>' + phItems;
 
   el.querySelectorAll('.leg-del').forEach(node=>{
@@ -704,7 +775,15 @@ function renderLegend(){
     });
   });
   const clearBtn = document.getElementById('clearFocusBtn');
-  if(clearBtn) clearBtn.addEventListener('click', ()=>{ activePerson=null; render(); });
+  if(clearBtn) clearBtn.addEventListener('click', ()=>{ activePersons=[]; render(); });
+
+  el.querySelectorAll('[data-phase]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const ph = btn.getAttribute('data-phase');
+      activePhase = (activePhase===ph) ? null : ph;
+      render();
+    });
+  });
 
   const qa = document.getElementById('quickAddInput');
   if(qa){
@@ -727,8 +806,9 @@ function renderLegend(){
 }
 
 function focusPerson(name){
-  activePerson = (activePerson===name) ? null : name;
-  // when focusing a person, automatically un-mute everyone and dim others via CSS
+  const i = activePersons.indexOf(name);
+  if(i>=0) activePersons.splice(i,1);
+  else activePersons.push(name);
   render();
 }
 
@@ -739,7 +819,8 @@ function removePerson(name){
   pushUndoSnapshot();
   people.splice(idx,1);
   delete muted[name];
-  if(activePerson===name) activePerson=null;
+  const ai = activePersons.indexOf(name);
+  if(ai>=0) activePersons.splice(ai,1);
   projects.forEach(proj=>{
     proj.phases.forEach(ph=>{
       ph.bars = ph.bars.filter(b=>b.person!==name);
@@ -830,6 +911,7 @@ function renderBody(){
       const lbl=document.createElement('div');
       lbl.className='proj-label';
       lbl.style.cssText=`width:${PROJ_W}px;min-width:${PROJ_W}px;min-height:${ROW_H}px;border-left-color:${bcolor}`;
+      const stCss = STATUS_CSS[proj.status] || STATUS_CSS['In progress'];
       lbl.innerHTML=`
         <div class="pname-row">
           <span class="pname proj-label-clickable" title="${proj.name} · click to edit project">${proj.name}</span>
@@ -837,6 +919,7 @@ function renderBody(){
         </div>
         <div class="ptags">
           ${proj.prio?`<span class="badge b-${proj.prio.toLowerCase()}">${proj.prio}</span>`:''}
+          <span class="badge badge-status" style="background:${stCss.bg};color:${stCss.tx}">${proj.status||'In progress'}</span>
           ${deps.map(d=>`<span class="badge b-dep" title="${d} dependency">🔗${d}</span>`).join('')}
         </div>`;
       lbl.querySelector('.pname').addEventListener('click', ()=>openEditProject(proj.id));
@@ -875,14 +958,17 @@ function renderBody(){
         lane.forEach(bar=>{
           const phaseName = bar._phase;
           const ph = proj.phases.find(p=>p.ph===phaseName);
+          const phStyle = PHASE_CSS[phaseName];
           const c=pc(bar.person);
           const bx = bar.startD*DAY_PX;
           const bwBar = Math.max((bar.endD-bar.startD+1)*DAY_PX-1, 15);
           const by = PAD + li*(LANE_H+LANE_GAP);
           const el=document.createElement('div');
-          const isDimmed = muted[bar.person] || (activePerson && bar.person!==activePerson);
+          const isDimmed = muted[bar.person]
+            || (activePersons.length && !activePersons.includes(bar.person))
+            || (activePhase && phaseName!==activePhase);
           el.className='bar'+(isDimmed?' muted':'');
-          el.style.cssText=`left:${bx}px;width:${bwBar}px;top:${by}px;height:${LANE_H}px;background:${c.bg};color:${c.tx};border:1px solid ${c.bd}`;
+          el.style.cssText=`left:${bx}px;width:${bwBar}px;top:${by}px;height:${LANE_H}px;background:${phStyle.bg};color:${phStyle.tx};border:1px solid ${phStyle.bd}`;
           el.innerHTML=`<div class="bar-resize bar-resize-l" title="Drag to resize start"></div>`
             +`<span class="bar-content">`
               +`<span class="bar-av" style="background:${c.tx};color:#fff">${bar.person[0]}</span>`
@@ -890,7 +976,7 @@ function renderBody(){
             +`</span>`
             +`<span class="bar-x" title="Remove ${bar.person} from ${PHASE_FULL[phaseName]}">×</span>`
             +`<div class="bar-resize bar-resize-r" title="Drag to resize end"></div>`;
-          el.title=`${bar.person} · ${PHASE_FULL[phaseName]} · click name to swap person`;
+          el.title=`${bar.person} · ${PHASE_FULL[phaseName]} · click name to edit dates`;
           el.dataset.projId  = proj.id;
           el.dataset.phase   = phaseName;
           el.dataset.barId   = bar.id;
@@ -907,7 +993,7 @@ function renderBody(){
             }
             if(e.target.classList.contains('bar-resize')) return;
             if(e.target.closest('.bar-content')){
-              openSwapPerson(e, proj.id, phaseName, realBar);
+              openEditBar(proj.id, phaseName, realBar);
               return;
             }
             openEditBar(proj.id, phaseName, realBar);
@@ -1059,7 +1145,7 @@ function dragEnd(e){
 
   justDragged = moved;
   dragState=null;
-  renderBody();
+  render();
   if(justDragged) setTimeout(()=>{ justDragged=false; }, 50);
 }
 
@@ -1172,6 +1258,7 @@ function resizeMove(e){
     const ne = Math.max(origStartD, Math.min(TOTAL_D-1, origEndD + dayDelta));
     bar.endD = ne;
   }
+  // Live preview only — cheap repaint, no save triggered mid-drag
   renderBody();
 }
 
@@ -1180,7 +1267,10 @@ function resizeEnd(){
   document.removeEventListener('mouseup', resizeEnd);
   justDragged = resizeState?.moved || false;
   resizeState = null;
-  renderBody();
+  // Use the wrapped render() here (not renderBody()) so the resize is
+  // actually persisted and synced — this was the bug: resizing changed
+  // the data but never told the save/sync layer about it.
+  render();
   if(justDragged) setTimeout(()=>{ justDragged=false; }, 50);
 }
 
@@ -1202,7 +1292,7 @@ function openAddProject(){ editState={mode:'newProj'}; showModal(); }
 function openEditProject(projId){
   const proj = projects.find(p=>p.id===projId);
   if(!proj) return;
-  editState={mode:'editProj', projId, name:proj.name, squad:proj.squad, prio:proj.prio, coreApi:proj.coreApi, jd:proj.jd};
+  editState={mode:'editProj', projId, name:proj.name, squad:proj.squad, prio:proj.prio, coreApi:proj.coreApi, jd:proj.jd, status:proj.status||'In progress'};
   showModal();
 }
 function openAddPerson(){  editState={mode:'newPerson'}; showModal(); }
@@ -1274,10 +1364,12 @@ function showModal(){
   } else if(s.mode==='newProj'){
     const sqOpts=[...new Set(RAW.map(r=>r[2]))].map(sq=>`<option>${sq}</option>`).join('');
     const prOpts=['P1','P2','P3','P4',''].map(p=>`<option value="${p}">${p||'—'}</option>`).join('');
+    const stOpts=STATUSES.map(st=>`<option ${st==='Not started'?'selected':''}>${st}</option>`).join('');
     inner=`<h3>New project</h3>
     <label>Name</label><input id="m_pname" placeholder="Project name">
     <label>Squad</label><select id="m_squad">${sqOpts}</select>
     <label>Priority</label><select id="m_prio">${prOpts}</select>
+    <label>Status</label><select id="m_status">${stOpts}</select>
     <label>Estimated hours</label><input id="m_hours" type="number" value="80" min="8">
     <div class="mbtns"><button onclick="closeModal()">Cancel</button><button class="ok" onclick="saveNewProj()">Create</button></div>`;
 
@@ -1286,10 +1378,12 @@ function showModal(){
     if(!allSquads.includes(s.squad)) allSquads.push(s.squad);
     const sqOpts=allSquads.map(sq=>`<option ${sq===s.squad?'selected':''}>${sq}</option>`).join('');
     const prOpts=['P1','P2','P3','P4',''].map(p=>`<option value="${p}" ${p===s.prio?'selected':''}>${p||'—'}</option>`).join('');
+    const stOpts=STATUSES.map(st=>`<option ${st===s.status?'selected':''}>${st}</option>`).join('');
     inner=`<h3>Edit project</h3>
     <label>Name</label><input id="m_pname2" value="${s.name.replace(/"/g,'&quot;')}">
     <label>Squad</label><select id="m_squad2">${sqOpts}</select>
     <label>Priority</label><select id="m_prio2">${prOpts}</select>
+    <label>Status</label><select id="m_status2">${stOpts}</select>
     <label style="display:flex;align-items:center;gap:6px;margin-top:10px;text-transform:none;font-weight:500">
       <input type="checkbox" id="m_coreapi2" ${s.coreApi?'checked':''} style="width:auto"> Depends on Core API
     </label>
@@ -1302,8 +1396,9 @@ function showModal(){
     </div>`;
 
   } else {
+    const projOpts = projects.map(p=>`<option value="${p.id}" ${p.id===s.projId?'selected':''}>${p.name}</option>`).join('');
     inner=`<h3>${s.mode==='add'?'Assign person':'Edit allocation'}</h3>
-    ${proj?`<p style="font-size:10px;color:var(--ink2);margin-bottom:6px;font-weight:500">${proj.name}</p>`:''}
+    <label>Project</label><select id="m_proj">${projOpts}</select>
     <label>Person</label><select id="m_person">${pOpts(s.bar.person)}</select>
     <label>Phase</label><select id="m_phase">${phOpts(s.phase)}</select>
     <label>Start date</label>${dateOpts(s.bar.startD,'m_st')}
@@ -1327,18 +1422,20 @@ function bgClose(e){ if(e.target===document.getElementById('overlay')) closeModa
 
 function saveBar(){
   const s=editState;
+  const newProjId=+document.getElementById('m_proj').value;
   const person=document.getElementById('m_person').value;
   const newPhase=document.getElementById('m_phase').value;
   const startD=readDateOpt('m_st');
   const endD=readDateOpt('m_en');
   if(endD<startD) return;
   pushUndoSnapshot();
-  const proj=projects.find(p=>p.id===s.projId);
-  const oldPh=proj.phases.find(p=>p.ph===s.phase);
-  const targetPh=proj.phases.find(p=>p.ph===newPhase);
+  const oldProj=projects.find(p=>p.id===s.projId);
+  const newProj=projects.find(p=>p.id===newProjId) || oldProj;
+  const targetPh=newProj.phases.find(p=>p.ph===newPhase);
 
   if(s.mode==='edit'){
-    // remove from the old phase (in case phase changed) then add to target phase
+    // remove from the old project/phase (in case project or phase changed)
+    const oldPh=oldProj.phases.find(p=>p.ph===s.phase);
     const i=oldPh.bars.indexOf(s.orig);
     if(i>=0) oldPh.bars.splice(i,1);
     targetPh.bars.push({...s.orig, person, startD, endD});
@@ -1365,10 +1462,11 @@ function saveNewProj(){
   const name=document.getElementById('m_pname').value.trim()||'New Project';
   const squad=document.getElementById('m_squad').value;
   const prio=document.getElementById('m_prio').value;
+  const status=document.getElementById('m_status').value;
   const hours=parseInt(document.getElementById('m_hours').value)||80;
   pushUndoSnapshot();
   const id=Math.max(...projects.map(p=>p.id))+1;
-  projects.push(buildProject([id,name,squad,prio,false,false,hours]));
+  projects.push(buildProject([id,name,squad,prio,false,false,hours,status]));
   if(!ALL_SQUADS.includes(squad)) ALL_SQUADS.push(squad);
   closeModal(); render();
 }
@@ -1381,6 +1479,7 @@ function saveEditProject(){
   proj.name = document.getElementById('m_pname2').value.trim() || proj.name;
   proj.squad = document.getElementById('m_squad2').value;
   proj.prio  = document.getElementById('m_prio2').value;
+  proj.status = document.getElementById('m_status2').value;
   proj.coreApi = document.getElementById('m_coreapi2').checked;
   proj.jd = document.getElementById('m_jd2').checked;
   if(!ALL_SQUADS.includes(proj.squad)) ALL_SQUADS.push(proj.squad);
@@ -1422,7 +1521,7 @@ function setSyncStatus(text, kind){
 }
 
 function snapshotState(){
-  return { people, projects, muted, activeSquad, activePerson, ALL_SQUADS };
+  return { people, projects, muted, activeSquad, activeStatus, activePersons, activePhase, ALL_SQUADS };
 }
 
 async function sbRequest(method, body){
@@ -1450,7 +1549,9 @@ async function loadFromSupabase(){
       projects     = row.data.projects     ?? projects;
       muted        = row.data.muted        ?? muted;
       activeSquad  = row.data.activeSquad  ?? activeSquad;
-      activePerson = row.data.activePerson ?? activePerson;
+      activeStatus = row.data.activeStatus ?? activeStatus;
+      activePersons = row.data.activePersons ?? activePersons;
+      activePhase  = row.data.activePhase  ?? activePhase;
       if(row.data.ALL_SQUADS){
         ALL_SQUADS.length = 0;
         row.data.ALL_SQUADS.forEach(s=>ALL_SQUADS.push(s));
@@ -1519,7 +1620,9 @@ async function pollForRemoteChanges(){
       projects     = row.data.projects     ?? projects;
       muted        = row.data.muted        ?? muted;
       activeSquad  = row.data.activeSquad  ?? activeSquad;
-      activePerson = row.data.activePerson ?? activePerson;
+      activeStatus = row.data.activeStatus ?? activeStatus;
+      activePersons = row.data.activePersons ?? activePersons;
+      activePhase  = row.data.activePhase  ?? activePhase;
       if(row.data.ALL_SQUADS){
         ALL_SQUADS.length = 0;
         row.data.ALL_SQUADS.forEach(s=>ALL_SQUADS.push(s));
